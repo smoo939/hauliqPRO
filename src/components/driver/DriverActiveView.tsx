@@ -1,18 +1,41 @@
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { MapPin, Navigation, Clock, Package, Phone, CheckCircle, Truck } from 'lucide-react';
+import { Navigation, Clock, Package, Phone, CheckCircle, Truck, XCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { useState } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+
+const CANCEL_REASONS = [
+  'Unable to complete route',
+  'Truck breakdown',
+  'Cargo handling issue',
+  'Shipper not available',
+  'Route conditions unsafe',
+  'Personal emergency',
+  'Other',
+];
 
 export default function DriverActiveView() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [completing, setCompleting] = useState<string | null>(null);
+  const [cancelLoadId, setCancelLoadId] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelCustom, setCancelCustom] = useState('');
 
   const { data: activeLoads, isLoading } = useQuery({
     queryKey: ['driver-active-loads', user?.id],
@@ -38,6 +61,7 @@ export default function DriverActiveView() {
         .eq('id', loadId);
       if (error) throw error;
       toast.success('Load marked as delivered!');
+      queryClient.invalidateQueries({ queryKey: ['driver-active-loads'] });
     } catch (e: any) {
       toast.error(e.message || 'Failed to update');
     } finally {
@@ -45,19 +69,41 @@ export default function DriverActiveView() {
     }
   };
 
+  const cancelLoad = useMutation({
+    mutationFn: async ({ loadId, reason }: { loadId: string; reason: string }) => {
+      const { error } = await supabase.from('loads').update({
+        status: 'cancelled',
+        cancellation_reason: reason,
+        cancelled_by: 'driver',
+        driver_id: null,
+      }).eq('id', loadId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['driver-active-loads'] });
+      toast.success('Load cancelled. The shipper has been notified.');
+      setCancelLoadId(null);
+      setCancelReason('');
+      setCancelCustom('');
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
   const statusBadge = (s: string) => {
     switch (s) {
-      case 'in_transit': return { label: 'In Transit', class: 'bg-primary/10 text-primary border-primary/20' };
-      case 'picked_up': return { label: 'Picked Up', class: 'bg-warning/10 text-warning border-warning/20' };
-      default: return { label: 'Accepted', class: 'bg-green-500/10 text-green-500 border-green-500/20' };
+      case 'in_transit': return { label: 'In Transit', class: 'bg-warning/10 text-warning border-warning/20' };
+      case 'picked_up': return { label: 'Picked Up', class: 'bg-primary/10 text-primary border-primary/20' };
+      default: return { label: 'Accepted', class: 'bg-success/10 text-success border-success/20' };
     }
   };
+
+  const finalCancelReason = cancelReason === 'Other' ? cancelCustom : cancelReason;
 
   return (
     <div className="px-4 py-4 pb-24 space-y-4">
       <div className="flex items-center gap-2">
         <Navigation className="h-4 w-4 text-primary" />
-        <h2 className="text-base font-bold">Active Trips</h2>
+        <h2 className="text-base font-black">Active Trips</h2>
         {activeLoads && <Badge variant="secondary" className="text-[10px]">{activeLoads.length}</Badge>}
       </div>
 
@@ -72,9 +118,9 @@ export default function DriverActiveView() {
               <div className="h-14 w-14 rounded-2xl bg-muted flex items-center justify-center mb-3">
                 <Truck className="h-7 w-7 text-muted-foreground" />
               </div>
-              <p className="text-sm font-medium">No active trips</p>
+              <p className="text-sm font-semibold">No active trips</p>
               <p className="text-xs text-muted-foreground mt-1">
-                Accept a load from the Home tab to start a trip
+                Win a bid from the Home tab to get started
               </p>
             </CardContent>
           </Card>
@@ -89,13 +135,13 @@ export default function DriverActiveView() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
               >
-                <Card className="overflow-hidden">
+                <Card className="overflow-hidden industrial-border">
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-center justify-between">
-                      <Badge className={`text-[10px] px-2 py-0.5 border ${badge.class}`}>
+                      <Badge className={`text-[10px] px-2 py-0.5 border font-bold ${badge.class}`}>
                         {badge.label}
                       </Badge>
-                      <p className="text-lg font-black text-primary">
+                      <p className="text-xl font-black text-primary">
                         ${Number(load.price || 0).toLocaleString()}
                       </p>
                     </div>
@@ -108,7 +154,7 @@ export default function DriverActiveView() {
                         <div className="h-2.5 w-2.5 rounded-full bg-destructive" />
                       </div>
                       <div className="space-y-2 flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{load.pickup_location}</p>
+                        <p className="text-sm font-semibold truncate">{load.pickup_location}</p>
                         <p className="text-sm truncate text-muted-foreground">{load.delivery_location}</p>
                       </div>
                     </div>
@@ -131,7 +177,7 @@ export default function DriverActiveView() {
                     <div className="flex gap-2 pt-1">
                       <Button
                         size="sm"
-                        className="flex-1 h-9 text-xs font-bold"
+                        className="flex-1 h-9 text-xs font-bold bg-primary text-primary-foreground"
                         onClick={() => handleComplete(load.id)}
                         disabled={completing === load.id}
                       >
@@ -142,6 +188,17 @@ export default function DriverActiveView() {
                         <Phone className="h-3.5 w-3.5" />
                       </Button>
                     </div>
+
+                    {load.status === 'accepted' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 text-xs gap-1"
+                        onClick={() => { setCancelLoadId(load.id); setCancelReason(''); }}
+                      >
+                        <XCircle className="h-3.5 w-3.5" /> Cancel Accepted Load
+                      </Button>
+                    )}
                   </CardContent>
                 </Card>
               </motion.div>
@@ -149,6 +206,57 @@ export default function DriverActiveView() {
           })}
         </div>
       )}
+
+      {/* Cancel Dialog */}
+      <Dialog open={!!cancelLoadId} onOpenChange={(o) => !o && setCancelLoadId(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Cancel Load</DialogTitle>
+            <DialogDescription>
+              You must provide a reason. The shipper will be notified and the load returned to available.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label className="heavy-label">Reason for cancellation *</Label>
+              <div className="space-y-1.5">
+                {CANCEL_REASONS.map((reason) => (
+                  <label key={reason} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="driver-cancel-reason"
+                      value={reason}
+                      checked={cancelReason === reason}
+                      onChange={() => setCancelReason(reason)}
+                      className="accent-primary"
+                    />
+                    <span className="text-sm">{reason}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            {cancelReason === 'Other' && (
+              <Textarea
+                placeholder="Describe the reason..."
+                value={cancelCustom}
+                onChange={(e) => setCancelCustom(e.target.value)}
+                rows={2}
+              />
+            )}
+            <div className="flex gap-2 pt-1">
+              <Button variant="outline" className="flex-1" onClick={() => setCancelLoadId(null)}>Keep Trip</Button>
+              <Button
+                variant="destructive"
+                className="flex-1"
+                disabled={!cancelReason || (cancelReason === 'Other' && !cancelCustom) || cancelLoad.isPending}
+                onClick={() => cancelLoadId && cancelLoad.mutate({ loadId: cancelLoadId, reason: finalCancelReason })}
+              >
+                {cancelLoad.isPending ? 'Cancelling...' : 'Confirm Cancel'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -16,8 +16,8 @@ const pool = process.env.DATABASE_URL ? new Pool({ connectionString: process.env
 const tables = {
   profiles: ["id", "user_id", "full_name", "phone", "role", "avatar_url", "verified", "created_at", "updated_at"],
   user_roles: ["id", "user_id", "role", "created_at"],
-  loads: ["id", "shipper_id", "driver_id", "title", "description", "pickup_location", "delivery_location", "pickup_date", "pickup_time", "price", "platform_fee", "weight_lbs", "equipment_type", "load_type", "payment_method", "status", "tracking_code", "urgent", "accepted_at", "completed_at", "created_at", "updated_at"],
-  bids: ["id", "load_id", "driver_id", "amount", "message", "note", "status", "created_at", "updated_at"],
+  loads: ["id", "shipper_id", "driver_id", "title", "description", "pickup_location", "delivery_location", "pickup_date", "pickup_time", "price", "platform_fee", "weight_lbs", "equipment_type", "load_type", "payment_method", "status", "tracking_code", "urgent", "accepted_at", "completed_at", "cancellation_reason", "cancelled_by", "created_at", "updated_at"],
+  bids: ["id", "load_id", "driver_id", "amount", "message", "note", "eta", "status", "created_at", "updated_at"],
   messages: ["id", "load_id", "sender_id", "content", "created_at"],
   reviews: ["id", "load_id", "reviewer_id", "reviewed_id", "rating", "comment", "created_at"],
   notifications: ["id", "user_id", "title", "message", "body", "type", "read", "load_id", "created_at"],
@@ -116,6 +116,8 @@ async function migrate() {
       urgent boolean DEFAULT false,
       accepted_at timestamptz,
       completed_at timestamptz,
+      cancellation_reason text,
+      cancelled_by text,
       created_at timestamptz NOT NULL DEFAULT now(),
       updated_at timestamptz NOT NULL DEFAULT now()
     )`);
@@ -127,6 +129,7 @@ async function migrate() {
       amount numeric NOT NULL,
       message text,
       note text,
+      eta text,
       status text NOT NULL DEFAULT 'pending',
       created_at timestamptz NOT NULL DEFAULT now(),
       updated_at timestamptz NOT NULL DEFAULT now()
@@ -222,6 +225,12 @@ async function migrate() {
       created_at timestamptz NOT NULL DEFAULT now(),
       updated_at timestamptz NOT NULL DEFAULT now()
     )`);
+
+  // Safe column additions (idempotent)
+  const safeAlter = async (sql) => { try { await pool.query(sql); } catch {} };
+  await safeAlter(`ALTER TABLE loads ADD COLUMN IF NOT EXISTS cancellation_reason text`);
+  await safeAlter(`ALTER TABLE loads ADD COLUMN IF NOT EXISTS cancelled_by text`);
+  await safeAlter(`ALTER TABLE bids ADD COLUMN IF NOT EXISTS eta text`);
 }
 
 async function readJson(req) {
@@ -365,15 +374,46 @@ async function handleAuth(pathname, req, res) {
 
 async function handleFunction(name, body) {
   if (name === "ai-chatbot") {
-    if (!process.env.LOVABLE_API_KEY) return { status: 500, body: { error: "LOVABLE_API_KEY is not configured" } };
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) return { status: 500, body: { error: "GEMINI_API_KEY is not configured. Add it in Secrets." } };
+    const response = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
       method: "POST",
-      headers: { Authorization: `Bearer ${process.env.LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "google/gemini-3-flash-preview", messages: [{ role: "system", content: "You are Hauliq AI, a concise logistics assistant for freight marketplace users." }, ...(body.messages || [])], stream: true })
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "gemini-2.0-flash",
+        messages: [
+          { role: "system", content: "You are Hauliq AI, a concise logistics assistant for a freight marketplace in Zimbabwe. Help shippers post loads efficiently and help drivers find and bid on loads. Be professional and direct. Format responses with clear line breaks." },
+          ...(body.messages || [])
+        ],
+        stream: true
+      })
     });
     return { proxy: response };
   }
-  if (name === "ai-load-matching") return { status: 200, body: { action: body.action, result: { carriers: [], market_insight: "AI matching requires LOVABLE_API_KEY to be configured.", recommended_rate_usd: Number(body.load?.price || 0), rate_range_low_usd: Number(body.load?.price || 0), rate_range_high_usd: Number(body.load?.price || 0), rate_per_km_usd: 0, estimated_distance_km: 0, fuel_cost_estimate_usd: 0, platform_fee_usd: Number(body.load?.price || 0) * 0.1, driver_payout_usd: Number(body.load?.price || 0) * 0.9, price_factors: [], market_comparison: "Configure LOVABLE_API_KEY for live AI pricing." } } };
+  if (name === "ai-load-matching") {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) return { status: 200, body: { action: body.action, result: { carriers: [], market_insight: "AI matching requires GEMINI_API_KEY to be configured in Secrets.", recommended_rate_usd: Number(body.load?.price || 0), rate_range_low_usd: Number(body.load?.price || 0), rate_range_high_usd: Number(body.load?.price || 0), rate_per_km_usd: 0, estimated_distance_km: 0, fuel_cost_estimate_usd: 0, platform_fee_usd: Number(body.load?.price || 0) * 0.1, driver_payout_usd: Number(body.load?.price || 0) * 0.9, price_factors: [], market_comparison: "Configure GEMINI_API_KEY in Secrets for live AI pricing." } } };
+    try {
+      const prompt = `You are a freight pricing AI for Zimbabwe logistics. Analyze this load and provide market rate insights in JSON:
+Load: ${JSON.stringify(body.load || {})}
+Respond ONLY with valid JSON containing: recommended_rate_usd, rate_range_low_usd, rate_range_high_usd, market_insight (string, 1 sentence).`;
+      const resp = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "gemini-2.0-flash", messages: [{ role: "user", content: prompt }] })
+      });
+      const data = await resp.json();
+      const text = data.choices?.[0]?.message?.content || "{}";
+      const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+      return { status: 200, body: { action: body.action, result: { ...parsed, platform_fee_usd: Number(parsed.recommended_rate_usd || 0) * 0.1, driver_payout_usd: Number(parsed.recommended_rate_usd || 0) * 0.9 } } };
+    } catch {
+      return { status: 200, body: { action: body.action, result: { recommended_rate_usd: Number(body.load?.price || 0), market_insight: "Could not get AI pricing at this time." } } };
+    }
+  }
   if (name === "verify-document") return { status: 200, body: { success: true, data: { valid: true, face_detected: true, liveness_indicators: "natural" }, status: "manual_review", issues: [], message: "Manual review requested." } };
   return { status: 404, body: { error: "Function not found" } };
 }

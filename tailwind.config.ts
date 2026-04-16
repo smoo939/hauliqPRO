@@ -58,6 +58,14 @@ export default {
           DEFAULT: "hsl(var(--warning))",
           foreground: "hsl(var(--warning-foreground))",
         },
+        amber: {
+          DEFAULT: "#FFBF00",
+          50: "#FFFBEB",
+          100: "#FEF3C7",
+          400: "#FDE047",
+          500: "#FFBF00",
+          600: "#D97706",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
@@ -92,8 +100,12 @@ export default {
           to: { transform: "translateY(0)" },
         },
         "pulse-glow": {
-          "0%, 100%": { boxShadow: "0 0 8px hsl(221 89% 55% / 0.3)" },
-          "50%": { boxShadow: "0 0 20px hsl(221 89% 55% / 0.5)" },
+          "0%, 100%": { boxShadow: "0 0 8px hsl(45 100% 50% / 0.3)" },
+          "50%": { boxShadow: "0 0 24px hsl(45 100% 50% / 0.6)" },
+        },
+        "amber-pulse": {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.6" },
         },
       },
       animation: {
@@ -102,6 +114,7 @@ export default {
         "fade-up": "fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1)",
         "slide-up": "slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
         "pulse-glow": "pulse-glow 2s ease-in-out infinite",
+        "amber-pulse": "amber-pulse 2s ease-in-out infinite",
       },
     },
   },

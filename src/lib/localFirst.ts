@@ -10,6 +10,7 @@ export type LocalBid = {
   amount: number;
   message?: string | null;
   note?: string | null;
+  eta?: string | null;
   status: LocalBidStatus;
   created_at: string;
   updated_at: string;

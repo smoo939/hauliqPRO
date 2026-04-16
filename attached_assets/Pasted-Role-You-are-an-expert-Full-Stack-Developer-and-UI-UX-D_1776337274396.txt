@@ -1,0 +1,41 @@
+Role: You are an expert Full-Stack Developer and UI/UX Designer.
+
+Context: Upgrade the Hauliq logistics marketplace (React, Supabase, Capacitor, SQLite). Treat the attached images as a Design System reference only, not a layout blueprint.
+
+Part 1: The "Safe" Branding Update
+
+CRITICAL: Do not change the existing app navigation, page structure, or functional logic. This is a theming and skinning task.
+
+Color Mapping: Replace the 'Midnight' palette with a foundation of True Black (#000000) and Deep Charcoal (#121212). Use Electric Amber (#FFBF00) strictly for high-signal actions (Bidding, Assigning, Success states).
+
+Component Skinning: Update containers and cards to reflect the Bento-box spacing and 'Industrial-Tech' borders shown in the images, but keep data fields exactly where they currently reside.
+
+Typography: Use clean, sans-serif fonts with high information density to create a robust, "Heavy Machinery" software feel.
+
+Part 2: 13 Functional Requirements
+
+Map UI: Apply high-contrast 'Midnight' dark mode style. Base: #242f3e, Roads: #38414e.
+
+Carrier Workflow: Remove 'Accept Load'. Replace with 'Submit Bid' (Price + ETA).
+
+Shipper Control: Add a 'Review Bids' screen showing carrier ratings, truck photos, and an 'Assign' button.
+
+AI Fix: Remove LOVABLE_API_KEY. Connect the chatbot to the GEMINI_API_KEY in Secrets.
+
+Google Auth: Fix the redirect loop. Use deep-linking for app return after login.
+
+Verification Gate: Lock bidding behind an is_verified check. Show 'Verification Pending' state for unverified users.
+
+Ratings: Implement a 5-star system for Shippers to rate Carriers post-delivery.
+
+Cancellations: Allow Shippers to cancel posts and Carriers to cancel accepted loads (reason required).
+
+Chat Lock: Enable chat ONLY after a bid is accepted.
+
+Geofencing: Filter loads to within 100km of the Carrier's GPS location (e.g., hide Bulawayo loads from Harare drivers).
+
+Hauliq AI Assistant: In the 'Create' tab, let AI draft cargo descriptions and recommend truck types.
+
+Offline Logic: App must remain 100% usable offline using SQLite. Use a 'Clock' icon for offline bids and a 'Checkmark' once synced to Supabase.
+
+Industrial-Tech Layout: Organize the dashboard using the modular bento-box grid style seen in the attached images.
