@@ -246,7 +246,7 @@ async function refreshBidsFromServer(localLoads: any[]) {
   if (bidsToStore.length > 0) await putMany(BIDS_STORE, bidsToStore);
 }
 
-export async function savePendingBid(input: { load_id: string; driver_id: string; amount: number; message?: string | null; note?: string | null }) {
+export async function savePendingBid(input: { load_id: string; driver_id: string; amount: number; message?: string | null; note?: string | null; eta?: string | null }) {
   const now = new Date().toISOString();
   const bid: LocalBid = {
     id: crypto.randomUUID(),
@@ -255,6 +255,7 @@ export async function savePendingBid(input: { load_id: string; driver_id: string
     amount: input.amount,
     message: input.message || null,
     note: input.note || input.message || null,
+    eta: input.eta || null,
     status: 'pending',
     created_at: now,
     updated_at: now,
@@ -292,6 +293,7 @@ export async function syncPendingBids() {
           amount: bid.amount,
           message: bid.message || bid.note || null,
           note: bid.note || bid.message || null,
+          eta: bid.eta || null,
           status: 'pending',
         },
         single: true,

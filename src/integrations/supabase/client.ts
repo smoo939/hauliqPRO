@@ -135,6 +135,7 @@ class QueryBuilder {
           amount: Number(row.amount),
           message: row.message || null,
           note: row.note || null,
+          eta: row.eta || null,
         }));
       }
       return { data: this.singleResult ? saved[0] : saved, error: null, count: saved.length };

@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Navigation, Clock, Package, Phone, CheckCircle, Truck, XCircle } from 'lucide-react';
+import { Navigation, Clock, Package, Phone, CheckCircle, Truck, XCircle, DollarSign, Star } from 'lucide-react';
 import { format } from 'date-fns';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -97,14 +97,57 @@ export default function DriverActiveView() {
     }
   };
 
+  const { data: stats } = useQuery({
+    queryKey: ['driver-stats', user?.id],
+    queryFn: async () => {
+      const [earningsRes, reviewsRes] = await Promise.all([
+        supabase.from('loads').select('price').eq('driver_id', user!.id).eq('status', 'delivered'),
+        supabase.from('reviews').select('rating').eq('reviewed_id', user!.id),
+      ]);
+      const loads = earningsRes.data || [];
+      const reviews = reviewsRes.data || [];
+      const totalEarnings = loads.reduce((sum: number, l: any) => sum + Number(l.price || 0), 0);
+      const avgRating = reviews.length
+        ? (reviews.reduce((s: number, r: any) => s + Number(r.rating), 0) / reviews.length).toFixed(1)
+        : '—';
+      return { totalEarnings, tripsCompleted: loads.length, avgRating };
+    },
+    enabled: !!user,
+  });
+
   const finalCancelReason = cancelReason === 'Other' ? cancelCustom : cancelReason;
 
   return (
     <div className="px-4 py-4 pb-24 space-y-4">
+      {/* Stats strip — matches mockup design */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="bento-card p-3 text-center">
+          <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">
+            <DollarSign className="h-3 w-3" />
+          </div>
+          <p className="text-base font-black text-primary leading-none">${(stats?.totalEarnings || 0).toLocaleString()}</p>
+          <p className="heavy-label mt-1">Earned</p>
+        </div>
+        <div className="bento-card p-3 text-center">
+          <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">
+            <Truck className="h-3 w-3" />
+          </div>
+          <p className="text-base font-black leading-none">{stats?.tripsCompleted ?? '—'}</p>
+          <p className="heavy-label mt-1">Completed</p>
+        </div>
+        <div className="bento-card p-3 text-center">
+          <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">
+            <Star className="h-3 w-3" />
+          </div>
+          <p className="text-base font-black leading-none text-primary">{stats?.avgRating ?? '—'}</p>
+          <p className="heavy-label mt-1">Rating</p>
+        </div>
+      </div>
+
       <div className="flex items-center gap-2">
         <Navigation className="h-4 w-4 text-primary" />
-        <h2 className="text-base font-black">Active Trips</h2>
-        {activeLoads && <Badge variant="secondary" className="text-[10px]">{activeLoads.length}</Badge>}
+        <h2 className="text-sm font-black uppercase tracking-wide">Active Trips</h2>
+        {activeLoads && activeLoads.length > 0 && <Badge className="text-[10px] bg-primary/20 text-primary border-primary/30">{activeLoads.length}</Badge>}
       </div>
 
       {isLoading ? (
