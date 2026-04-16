@@ -231,6 +231,7 @@ async function migrate() {
   await safeAlter(`ALTER TABLE loads ADD COLUMN IF NOT EXISTS cancellation_reason text`);
   await safeAlter(`ALTER TABLE loads ADD COLUMN IF NOT EXISTS cancelled_by text`);
   await safeAlter(`ALTER TABLE bids ADD COLUMN IF NOT EXISTS eta text`);
+  await safeAlter(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS company_name text`);
 }
 
 async function readJson(req) {
@@ -354,7 +355,16 @@ async function handleAuth(pathname, req, res) {
     const metadata = body.data || {};
     try {
       const result = await pool.query("INSERT INTO app_users (id, email, password_hash, user_metadata) VALUES ($1, $2, $3, $4) RETURNING *", [id, email, hashPassword(password), metadata]);
-      await pool.query("INSERT INTO profiles (user_id, full_name, phone) VALUES ($1, $2, $3) ON CONFLICT (user_id) DO NOTHING", [id, metadata.full_name || "", metadata.phone || ""]);
+      await pool.query(
+        "INSERT INTO profiles (user_id, full_name, phone, role, company_name) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (user_id) DO UPDATE SET role = COALESCE(EXCLUDED.role, profiles.role), company_name = COALESCE(EXCLUDED.company_name, profiles.company_name)",
+        [id, metadata.full_name || "", metadata.phone || "", metadata.role || "shipper", metadata.company_name || null]
+      );
+      if (metadata.role === "driver" && metadata.truck_type) {
+        await pool.query(
+          "INSERT INTO truck_verifications (id, user_id, truck_label, registration_number, overall_status) VALUES ($1, $2, $3, $4, 'pending') ON CONFLICT DO NOTHING",
+          [randomUUID(), id, metadata.truck_type, metadata.plate_number || ""]
+        ).catch(() => {});
+      }
       return send(res, 200, { data: { user: createSession(result.rows[0]).user, session: createSession(result.rows[0]) }, error: null });
     } catch (error) {
       return send(res, 400, { error: { message: error.code === "23505" ? "An account with this email already exists" : error.message } });

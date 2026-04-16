@@ -16,16 +16,16 @@ L.Icon.Default.mergeOptions({
 });
 
 const pickupIcon = new L.DivIcon({
-  html: `<div style="background:hsl(221,89%,55%);width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid white;box-shadow:0 2px 8px rgba(37,99,235,0.4);"><svg width="12" height="12" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="12" r="5"/></svg></div>`,
-  iconSize: [26, 26],
-  iconAnchor: [13, 13],
+  html: `<div style="background:#FFBF00;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid #000;box-shadow:0 2px 12px rgba(255,191,0,0.5);"><svg width="12" height="12" viewBox="0 0 24 24" fill="#000"><circle cx="12" cy="12" r="5"/></svg></div>`,
+  iconSize: [28, 28],
+  iconAnchor: [14, 14],
   className: '',
 });
 
 const deliveryIcon = new L.DivIcon({
-  html: `<div style="background:hsl(152,69%,40%);width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid white;box-shadow:0 2px 8px rgba(34,197,94,0.4);"><svg width="12" height="12" viewBox="0 0 24 24" fill="white"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></div>`,
-  iconSize: [26, 26],
-  iconAnchor: [13, 13],
+  html: `<div style="background:#ef4444;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid #fff;box-shadow:0 2px 12px rgba(239,68,68,0.5);"><svg width="12" height="12" viewBox="0 0 24 24" fill="white"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></div>`,
+  iconSize: [28, 28],
+  iconAnchor: [14, 14],
   className: '',
 });
 
@@ -183,7 +183,7 @@ export default function RouteMap({ pickup, delivery, onRouteCalculated, classNam
             <>
               <Polyline
                 positions={routeInfo.routeCoords}
-                pathOptions={{ color: 'hsl(221, 89%, 55%)', weight: 6, opacity: 0.85 }}
+                pathOptions={{ color: '#FFBF00', weight: 5, opacity: 0.95 }}
               />
               <FitBounds coords={routeInfo.routeCoords} />
             </>

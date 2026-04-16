@@ -212,15 +212,25 @@ export default function HauliqAIChatbot() {
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0, opacity: 0 }}
-            className="fixed bottom-24 right-4 z-50"
+            className="fixed bottom-24 right-4 z-[2500]"
           >
-            <Button
-              onClick={() => setOpen(true)}
-              className="h-14 w-14 rounded-full shadow-lg bg-[hsl(217,91%,60%)] hover:bg-[hsl(217,91%,50%)] text-white"
-              size="icon"
-            >
-              <Sparkles className="h-6 w-6" />
-            </Button>
+            <div className="relative">
+              {/* Outer amber pulse ring */}
+              <span className="absolute inset-0 rounded-full bg-primary animate-ping opacity-40 pointer-events-none" />
+              {/* Secondary slower ring */}
+              <span className="absolute -inset-1 rounded-full bg-primary/20 animate-pulse pointer-events-none" />
+              {/* Floating sparkles */}
+              <span className="absolute -top-1 -right-1 text-primary text-xs animate-bounce pointer-events-none select-none" style={{ animationDuration: '1.4s' }}>✦</span>
+              <span className="absolute -bottom-1 -left-1 text-primary text-[9px] animate-bounce pointer-events-none select-none" style={{ animationDuration: '1.8s' }}>✦</span>
+              <Button
+                onClick={() => setOpen(true)}
+                className="h-14 w-14 rounded-full shadow-xl bg-primary hover:bg-primary/90 text-primary-foreground relative z-10 border-2 border-primary/50"
+                style={{ boxShadow: '0 0 20px rgba(255,191,0,0.45), 0 4px 16px rgba(0,0,0,0.4)' }}
+                size="icon"
+              >
+                <Sparkles className="h-6 w-6" />
+              </Button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

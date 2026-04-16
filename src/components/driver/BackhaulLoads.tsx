@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { MapPin, DollarSign, RotateCcw, TrendingUp } from 'lucide-react';
+import { MapPin, DollarSign, RotateCcw } from 'lucide-react';
 
 interface BackhaulLoad {
   id: string;
@@ -163,21 +163,7 @@ export default function BackhaulLoads({ deliveryLocation, originLocation, forwar
     findBackhauls();
   }, [deliveryLocation, originLocation, equipmentType]);
 
-  if (loading) {
-    return (
-      <div className="space-y-2">
-        <div className="flex items-center gap-1.5">
-          <RotateCcw className="h-3.5 w-3.5 text-primary animate-spin" />
-          <span className="text-xs font-medium text-muted-foreground">Finding return loads...</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (!backhauls.length) return null;
-
-  const topBackhaul = backhauls[0];
-  const totalEarnings = (forwardPrice || 0) + (topBackhaul?.price || 0);
+  if (loading || !backhauls.length) return null;
 
   return (
     <div className="space-y-3">
@@ -186,20 +172,6 @@ export default function BackhaulLoads({ deliveryLocation, originLocation, forwar
           <RotateCcw className="h-3.5 w-3.5 text-primary" />
           <span className="text-xs font-bold">Return Loads</span>
           <Badge variant="secondary" className="text-[9px] h-4 px-1.5">AI</Badge>
-        </div>
-      </div>
-
-      {/* Total Earnings Summary */}
-      <div className="bg-gradient-to-r from-primary/10 to-primary/5 rounded-lg p-3 border border-primary/20">
-        <div className="flex items-center gap-1.5 mb-1">
-          <TrendingUp className="h-3.5 w-3.5 text-primary" />
-          <span className="text-xs font-semibold text-primary">Total Potential Earnings</span>
-        </div>
-        <div className="flex items-baseline gap-2">
-          <span className="text-xl font-black text-primary">${totalEarnings.toLocaleString()}</span>
-          <span className="text-[10px] text-muted-foreground">
-            (Forward ${(forwardPrice || 0).toLocaleString()} + Return ${(topBackhaul?.price || 0).toLocaleString()})
-          </span>
         </div>
       </div>
 

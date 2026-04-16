@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { MessageCircle, Package, XCircle, Star } from 'lucide-react';
+import { MessageCircle, Package, XCircle, Star, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
@@ -141,6 +141,22 @@ export default function ShipperShipmentsView() {
     onError: (err: any) => toast.error(err.message),
   });
 
+  const deleteLoad = useMutation({
+    mutationFn: async (loadId: string) => {
+      const { error } = await supabase.from('loads').update({
+        status: 'cancelled',
+        cancellation_reason: '__deleted__',
+        cancelled_by: 'shipper',
+      }).eq('id', loadId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shipper-loads'] });
+      toast.success('Load deleted.');
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
   const submitRating = useMutation({
     mutationFn: async ({ loadId, driverId, rating, comment }: { loadId: string; driverId: string; rating: number; comment: string }) => {
       const { error } = await supabase.from('reviews').insert({
@@ -165,7 +181,7 @@ export default function ShipperShipmentsView() {
 
   const displayLoads = activeTab === 'active'
     ? loads?.filter((l: any) => !['delivered', 'cancelled'].includes(l.status))
-    : loads?.filter((l: any) => ['delivered', 'cancelled'].includes(l.status));
+    : loads?.filter((l: any) => ['delivered', 'cancelled'].includes(l.status) && l.cancellation_reason !== '__deleted__');
 
   const finalCancelReason = cancelReason === 'Other' ? cancelCustom : cancelReason;
 
@@ -296,17 +312,32 @@ export default function ShipperShipmentsView() {
                       </div>
                     )}
 
-                    {/* Cancel button for active loads */}
+                    {/* Cancel / Delete buttons for active loads */}
                     {['posted', 'accepted'].includes(load.status) && (
-                      <div className="px-4 py-2 border-t border-border/40">
+                      <div className="px-4 py-2 border-t border-border/40 flex items-center gap-2">
                         <Button
                           variant="ghost"
                           size="sm"
                           className="text-destructive hover:text-destructive hover:bg-destructive/10 text-xs gap-1"
                           onClick={() => { setCancelLoadId(load.id); setCancelReason(''); }}
                         >
-                          <XCircle className="h-3.5 w-3.5" /> Cancel Load
+                          <XCircle className="h-3.5 w-3.5" /> Cancel
                         </Button>
+                        {load.status === 'posted' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 text-xs gap-1 ml-auto"
+                            disabled={deleteLoad.isPending}
+                            onClick={() => {
+                              if (window.confirm('Delete this load? It will be removed from the marketplace.')) {
+                                deleteLoad.mutate(load.id);
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" /> Delete
+                          </Button>
+                        )}
                       </div>
                     )}
 
