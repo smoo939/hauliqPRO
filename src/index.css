@@ -143,12 +143,12 @@
   }
 }
 
-/* Dark mode map — use LocationIQ dark tiles; no CSS filter needed */
+/* Leaflet map container backgrounds */
 .dark .leaflet-container {
-  background: #0d0d0d;
+  background: #1a1a1a;
 }
 .leaflet-container {
-  background: #0d0d0d;
+  background: #e8e8e8;
 }
 
 /* Leaflet popup dark mode */

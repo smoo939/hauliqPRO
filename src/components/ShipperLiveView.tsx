@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
@@ -10,7 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { MapPin, ChevronUp, ChevronDown, Package, MessageCircle, XCircle, Navigation, Clock } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { AlertTriangle, ChevronUp, ChevronDown, Package, MessageCircle, XCircle, Navigation, Satellite } from 'lucide-react';
 import AppSidebar from '@/components/AppSidebar';
 import { motion } from 'framer-motion';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -18,6 +19,7 @@ import { toast } from 'sonner';
 import LoadChat from '@/components/LoadChat';
 import StatusMilestones from '@/components/StatusMilestones';
 import { BidList } from '@/components/BidSystem';
+import LiveTrackingMap from '@/components/LiveTrackingMap';
 
 // Fix leaflet icons
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -87,6 +89,9 @@ export default function ShipperLiveView() {
   const [selectedLoad, setSelectedLoad] = useState<any | null>(null);
   const [showChat, setShowChat] = useState(false);
   const [geoShipments, setGeoShipments] = useState<GeoShipment[]>([]);
+  const [showLiveMap, setShowLiveMap] = useState(false);
+  const [mismatchPending, setMismatchPending] = useState<{ bidId: string; driverId: string; amount: number; loadId: string } | null>(null);
+  const [mismatchInfo, setMismatchInfo] = useState<{ driverTruck: string; requiredTruck: string; plate: string } | null>(null);
 
   const { data: loads, isLoading } = useQuery({
     queryKey: ['shipper-live-loads', user?.id],
@@ -145,9 +150,32 @@ export default function ShipperLiveView() {
       }).eq('id', loadId);
       if (loadError) throw loadError;
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['shipper-live-loads'] }); toast.success('Bid accepted!'); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['shipper-live-loads'] }); toast.success('Bid accepted!'); setMismatchPending(null); setMismatchInfo(null); },
     onError: (err: any) => toast.error(err.message),
   });
+
+  const handleAcceptBidWithCheck = useCallback(async (bidId: string, driverId: string, amount: number, loadId: string) => {
+    const load = loads?.find((l: any) => l.id === loadId) || selectedLoad;
+    const { data: truckVer } = await supabase
+      .from('truck_verifications')
+      .select('truck_label, registration_number')
+      .eq('user_id', driverId)
+      .limit(1)
+      .maybeSingle();
+
+    const requiredEquipment = load?.equipment_type;
+    const driverTruck = truckVer?.truck_label;
+    const hasMismatch = requiredEquipment && driverTruck &&
+      !driverTruck.toLowerCase().includes(requiredEquipment.toLowerCase()) &&
+      !requiredEquipment.toLowerCase().includes(driverTruck.toLowerCase());
+
+    if (hasMismatch) {
+      setMismatchPending({ bidId, driverId, amount, loadId });
+      setMismatchInfo({ driverTruck, requiredTruck: requiredEquipment, plate: truckVer?.registration_number || 'N/A' });
+    } else {
+      acceptBid.mutate({ bidId, driverId, amount, loadId });
+    }
+  }, [loads, selectedLoad, acceptBid]);
 
   const toggleSheet = () => {
     if (sheetHeight <= SNAP_COLLAPSED) setSheetHeight(SNAP_HALF);
@@ -267,8 +295,48 @@ export default function ShipperLiveView() {
         </div>
       </motion.div>
 
+      {/* Truck type mismatch warning dialog */}
+      <Dialog open={!!mismatchPending} onOpenChange={(o) => !o && setMismatchPending(null)}>
+        <DialogContent className="mx-4 rounded-2xl max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-warning">
+              <AlertTriangle className="h-5 w-5" /> Truck Type Mismatch
+            </DialogTitle>
+            <DialogDescription>The carrier's registered truck differs from what this load requires.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">This carrier's truck does not match the required equipment for this load.</p>
+            <div className="rounded-lg bg-warning/10 border border-warning/30 p-3 space-y-1.5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Load requires:</span>
+                <span className="font-semibold">{mismatchInfo?.requiredTruck}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Carrier has:</span>
+                <span className="font-semibold">{mismatchInfo?.driverTruck}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Plate:</span>
+                <span className="font-mono font-bold">{mismatchInfo?.plate}</span>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">You can still accept this bid, but the carrier's truck type differs from your requirements.</p>
+          </div>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => setMismatchPending(null)}>Cancel</Button>
+            <Button
+              variant="default"
+              className="flex-1 bg-warning hover:bg-warning/90 text-black font-semibold"
+              onClick={() => mismatchPending && acceptBid.mutate(mismatchPending)}
+            >
+              Accept Anyway
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Shipment detail modal */}
-      <Sheet open={!!selectedLoad} onOpenChange={(o) => !o && setSelectedLoad(null)}>
+      <Sheet open={!!selectedLoad} onOpenChange={(o) => { if (!o) { setSelectedLoad(null); setShowLiveMap(false); } }}>
         <SheetContent side="bottom" className="h-[85vh] rounded-t-2xl p-0 overflow-hidden">
           {selectedLoad && (
             <div className="flex flex-col h-full">
@@ -321,9 +389,32 @@ export default function ShipperLiveView() {
                     <BidList
                       loadId={selectedLoad.id}
                       onAcceptBid={(bidId, driverId, amount) =>
-                        acceptBid.mutate({ bidId, driverId, amount, loadId: selectedLoad.id })
+                        handleAcceptBidWithCheck(bidId, driverId, amount, selectedLoad.id)
                       }
                     />
+                  </div>
+                )}
+
+                {/* Live tracking for in_transit loads */}
+                {selectedLoad.status === 'in_transit' && selectedLoad.driver_id && (
+                  <div className="space-y-2">
+                    <button
+                      className="flex items-center gap-2 text-sm font-semibold text-primary"
+                      onClick={() => setShowLiveMap(v => !v)}
+                    >
+                      <Satellite className="h-4 w-4" />
+                      {showLiveMap ? 'Hide Live Map' : 'Show Live Tracking'}
+                    </button>
+                    {showLiveMap && (
+                      <div className="rounded-xl overflow-hidden border border-border" style={{ height: 220 }}>
+                        <LiveTrackingMap
+                          loadId={selectedLoad.id}
+                          driverId={selectedLoad.driver_id}
+                          pickupLocation={selectedLoad.pickup_location}
+                          deliveryLocation={selectedLoad.delivery_location}
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
 

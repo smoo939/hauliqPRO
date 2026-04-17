@@ -219,9 +219,6 @@ export default function HauliqAIChatbot() {
               <span className="absolute inset-0 rounded-full bg-primary animate-ping opacity-40 pointer-events-none" />
               {/* Secondary slower ring */}
               <span className="absolute -inset-1 rounded-full bg-primary/20 animate-pulse pointer-events-none" />
-              {/* Floating sparkles */}
-              <span className="absolute -top-1 -right-1 text-primary text-xs animate-bounce pointer-events-none select-none" style={{ animationDuration: '1.4s' }}>✦</span>
-              <span className="absolute -bottom-1 -left-1 text-primary text-[9px] animate-bounce pointer-events-none select-none" style={{ animationDuration: '1.8s' }}>✦</span>
               <Button
                 onClick={() => setOpen(true)}
                 className="h-14 w-14 rounded-full shadow-xl bg-primary hover:bg-primary/90 text-primary-foreground relative z-10 border-2 border-primary/50"

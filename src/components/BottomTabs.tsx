@@ -28,8 +28,24 @@ export default function BottomTabs({ role }: { role: 'shipper' | 'driver' }) {
         { path: '/driver/chat', label: 'Messages', icon: MessageCircle },
       ];
 
+  const activeIndex = tabs.findIndex(t => t.path === location.pathname);
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-[2000] border-t border-border bg-card/95 backdrop-blur-md safe-area-bottom">
+      {/* Active indicator bar — aligned precisely with active tab */}
+      <div className="relative flex" style={{ height: '2.5px' }}>
+        {tabs.map((tab, i) => (
+          <div key={tab.path} className="flex-1 relative overflow-hidden">
+            {i === activeIndex && (
+              <motion.div
+                layoutId="tab-top-indicator"
+                className="absolute inset-x-4 top-0 h-full rounded-full bg-primary"
+                transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+              />
+            )}
+          </div>
+        ))}
+      </div>
       <div className="flex items-stretch justify-around">
         {tabs.map((tab) => {
           const isActive = location.pathname === tab.path;
@@ -47,13 +63,6 @@ export default function BottomTabs({ role }: { role: 'shipper' | 'driver' }) {
                     : 'text-muted-foreground'
               )}
             >
-              {isActive && (
-                <motion.div
-                  layoutId="tab-indicator"
-                  className="absolute top-0 left-1/2 -translate-x-1/2 h-[2.5px] w-8 rounded-full bg-primary"
-                  transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-                />
-              )}
               <Icon className={cn('h-5 w-5', tab.highlight && !isActive && 'text-primary/70')} strokeWidth={isActive ? 2.2 : 1.8} />
               <span>{tab.label}</span>
             </button>

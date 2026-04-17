@@ -121,7 +121,6 @@ export default function AuthPage() {
             <Truck className="h-8 w-8 text-primary-foreground" />
           </div>
           <h1 className="text-3xl font-black tracking-tight text-foreground">Hauliq</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Industrial-grade freight marketplace</p>
         </div>
 
         <Card className="border-border/60 bg-card">

@@ -135,7 +135,7 @@ export default function DriverHomeView() {
   }, []);
 
   const loads = useMemo(() => localLoads.filter((load) => load.status === 'posted').slice(0, 60), [localLoads]);
-  const isLoading = !!user && loads.length === 0 && online;
+  const isLoading = false;
 
   // Geocode pickup locations
   useEffect(() => {
