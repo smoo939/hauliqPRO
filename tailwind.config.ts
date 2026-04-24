@@ -59,12 +59,19 @@ export default {
           foreground: "hsl(var(--warning-foreground))",
         },
         amber: {
-          DEFAULT: "#FFBF00",
+          DEFAULT: "#FBBF24",
           50: "#FFFBEB",
           100: "#FEF3C7",
-          400: "#FDE047",
-          500: "#FFBF00",
+          200: "#FDE68A",
+          300: "#FCD34D",
+          400: "#FBBF24",
+          500: "#F59E0B",
           600: "#D97706",
+        },
+        charcoal: {
+          DEFAULT: "#2D3436",
+          soft: "#3F4748",
+          muted: "#636E72",
         },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
@@ -78,9 +85,17 @@ export default {
         },
       },
       borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        sm: "0.5rem",
+        md: "0.75rem",
+        lg: "1rem",
+        xl: "1.25rem",       /* 20px — primary card radius */
+        "2xl": "1.5rem",
+        "3xl": "2rem",
+      },
+      boxShadow: {
+        soft: "0 10px 30px rgba(15, 23, 42, 0.04)",
+        float: "0 18px 40px rgba(15, 23, 42, 0.06)",
+        pop: "0 24px 60px rgba(15, 23, 42, 0.08)",
       },
       keyframes: {
         "accordion-down": {

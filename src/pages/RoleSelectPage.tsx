@@ -46,31 +46,31 @@ export default function RoleSelectPage() {
         className="w-full max-w-lg"
       >
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-black tracking-tight">Choose Your Role</h1>
-          <p className="mt-1 text-muted-foreground">How will you use Hauliq?</p>
+          <h1 className="text-3xl font-bold tracking-tight">Choose Your Role</h1>
+          <p className="mt-1.5 text-muted-foreground">How will you use Hauliq?</p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <Card
-            className="cursor-pointer border-2 border-transparent transition-all hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 active:scale-[0.97]"
+            className="cursor-pointer hover:shadow-float transition-shadow active:scale-[0.97]"
             onClick={() => !loading && handleSelect('shipper')}
           >
             <CardContent className="flex flex-col items-center gap-3 pt-8 pb-6 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-                <Package className="h-7 w-7 text-primary" />
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary glow-amber">
+                <Package className="h-7 w-7 text-primary-foreground" strokeWidth={1.8} />
               </div>
-              <h2 className="text-lg font-semibold">Shipper</h2>
+              <h2 className="text-lg font-bold tracking-tight">Shipper</h2>
               <p className="text-sm text-muted-foreground">Post loads and find reliable carriers to move your freight</p>
             </CardContent>
           </Card>
           <Card
-            className="cursor-pointer border-2 border-transparent transition-all hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 active:scale-[0.97]"
+            className="cursor-pointer hover:shadow-float transition-shadow active:scale-[0.97]"
             onClick={() => !loading && handleSelect('driver')}
           >
             <CardContent className="flex flex-col items-center gap-3 pt-8 pb-6 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-                <Truck className="h-7 w-7 text-primary" />
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary glow-amber">
+                <Truck className="h-7 w-7 text-primary-foreground" strokeWidth={1.8} />
               </div>
-              <h2 className="text-lg font-semibold">Carrier</h2>
+              <h2 className="text-lg font-bold tracking-tight">Carrier</h2>
               <p className="text-sm text-muted-foreground">Browse available loads and accept shipments that fit your route</p>
             </CardContent>
           </Card>

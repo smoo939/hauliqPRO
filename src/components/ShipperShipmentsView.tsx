@@ -25,11 +25,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 
 const statusColors: Record<string, string> = {
-  posted: 'bg-primary/10 text-primary border-primary/30',
-  accepted: 'bg-primary/10 text-primary border-primary/30',
-  in_transit: 'bg-warning/10 text-warning border-warning/30',
-  delivered: 'bg-success/10 text-success border-success/30',
-  cancelled: 'bg-destructive/10 text-destructive border-destructive/30',
+  posted: 'pill pill-amber',
+  accepted: 'pill pill-amber',
+  in_transit: 'pill pill-warning',
+  delivered: 'pill pill-success',
+  cancelled: 'pill pill-danger',
 };
 
 const CANCEL_REASONS = [
@@ -216,9 +216,9 @@ export default function ShipperShipmentsView() {
                     {/* Header row */}
                     <div className="flex items-center justify-between px-4 pt-3 pb-2">
                       <div className="flex items-center gap-1.5">
-                        <Badge variant="outline" className={`text-[10px] uppercase tracking-wide font-bold ${statusColors[load.status] || ''}`}>
+                        <span className={statusColors[load.status] || 'pill pill-muted'}>
                           {load.status.replace('_', ' ')}
-                        </Badge>
+                        </span>
                         {load.urgent && (
                           <Badge variant="outline" className="text-[10px] uppercase tracking-wide font-bold bg-destructive/10 text-destructive border-destructive/30">
                             🚨 Urgent

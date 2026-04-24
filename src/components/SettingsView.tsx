@@ -37,16 +37,16 @@ function SettingItem({ icon: Icon, label, description, onClick, trailing, danger
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-3 w-full p-3.5 rounded-lg text-left transition-colors hover:bg-muted/50 active:bg-muted ${danger ? 'text-destructive' : ''}`}
+      className={`flex items-center gap-3.5 w-full px-4 py-3 rounded-2xl text-left transition-colors hover:bg-secondary active:bg-muted ${danger ? 'text-destructive' : ''}`}
     >
-      <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${danger ? 'bg-destructive/10' : 'bg-muted'}`}>
-        <Icon className={`h-4.5 w-4.5 ${danger ? 'text-destructive' : 'text-muted-foreground'}`} />
+      <div className={`flex h-10 w-10 items-center justify-center rounded-2xl shrink-0 ${danger ? 'bg-destructive/10' : 'bg-secondary'}`}>
+        <Icon className={`h-[18px] w-[18px] ${danger ? 'text-destructive' : 'text-foreground'}`} strokeWidth={1.6} />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium">{label}</p>
-        {description && <p className="text-xs text-muted-foreground mt-0.5">{description}</p>}
+        <p className="text-[14px] font-semibold tracking-tight">{label}</p>
+        {description && <p className="text-xs text-muted-foreground mt-0.5 truncate">{description}</p>}
       </div>
-      {trailing || <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
+      {trailing || <ChevronRight className="h-4 w-4 text-muted-foreground/60 shrink-0" strokeWidth={1.5} />}
     </button>
   );
 }

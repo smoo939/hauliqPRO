@@ -24,25 +24,25 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-// Electric Amber load pin
+// Soft amber load pin
 const loadPinIcon = new L.DivIcon({
-  html: `<div style="background:#FFBF00;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2.5px solid rgba(0,0,0,0.5);box-shadow:0 2px 12px rgba(255,191,0,0.5);font-size:13px;">📦</div>`,
+  html: `<div style="background:#FBBF24;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid #ffffff;box-shadow:0 6px 16px rgba(251,191,36,0.45),0 2px 6px rgba(0,0,0,0.12);font-size:12px;">📦</div>`,
+  iconSize: [28, 28],
+  iconAnchor: [14, 14],
+  className: '',
+});
+
+const urgentPinIcon = new L.DivIcon({
+  html: `<div style="background:#2D3436;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid #FBBF24;box-shadow:0 6px 16px rgba(0,0,0,0.25);font-size:12px;">🚨</div>`,
   iconSize: [30, 30],
   iconAnchor: [15, 15],
   className: '',
 });
 
-const urgentPinIcon = new L.DivIcon({
-  html: `<div style="background:#ef4444;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2.5px solid rgba(0,0,0,0.5);box-shadow:0 2px 12px rgba(239,68,68,0.5);font-size:14px;">🚨</div>`,
-  iconSize: [32, 32],
-  iconAnchor: [16, 16],
-  className: '',
-});
-
-// Amber driver icon
+// Soft amber driver icon
 const driverIcon = new L.DivIcon({
-  html: `<div style="background:#FFBF00;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid rgba(0,0,0,0.6);box-shadow:0 2px 16px rgba(255,191,0,0.6);">
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+  html: `<div style="background:#FBBF24;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid #ffffff;box-shadow:0 6px 18px rgba(251,191,36,0.55),0 2px 8px rgba(0,0,0,0.18);">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2D3436" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
       <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/>
     </svg>
   </div>`,
@@ -273,22 +273,22 @@ export default function DriverHomeView() {
         <div className="mx-3 mt-3 flex items-center gap-2">
           <AppSidebar role="driver" />
 
-          <div className="flex-1 flex items-center gap-1.5 bg-card/90 backdrop-blur-md rounded-full px-3 py-2 border border-border shadow-lg">
-            <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <div className="flex-1 flex items-center gap-2 glass shadow-soft rounded-full px-3.5 py-2">
+            <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" strokeWidth={1.8} />
             <Input
-              placeholder="Search loads or locations..."
+              placeholder="Search loads or locations…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="border-0 bg-transparent h-6 text-xs p-0 focus-visible:ring-0 placeholder:text-muted-foreground/50"
+              className="border-0 bg-transparent h-6 text-[12px] p-0 rounded-none focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/60"
             />
           </div>
 
           {/* Online indicator */}
-          <div className="flex items-center gap-1 bg-card/90 backdrop-blur-md rounded-full px-2.5 py-2 border border-border shadow-lg shrink-0">
-            <span className={`text-[9px] font-bold ${online ? 'text-success' : 'text-muted-foreground'}`}>
+          <div className="flex items-center gap-1.5 glass shadow-soft rounded-full px-2.5 py-2 shrink-0">
+            <span className={`text-[9.5px] font-bold tracking-tight ${online ? 'text-foreground' : 'text-muted-foreground'}`}>
               {online ? 'LIVE' : 'OFF'}
             </span>
-            <Switch checked={online} disabled className="h-4 w-7 data-[state=checked]:bg-success" />
+            <Switch checked={online} disabled className="h-4 w-7 data-[state=checked]:bg-primary" />
           </div>
 
           <DriverFilters filters={filters} onChange={setFilters} />
@@ -299,13 +299,13 @@ export default function DriverHomeView() {
       <div className="absolute top-16 left-3 z-[1000]">
         <button
           onClick={() => setGeofenceEnabled(!geofenceEnabled)}
-          className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold border backdrop-blur-md shadow-md transition-all ${
+          className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold transition-all shadow-soft ${
             geofenceEnabled
-              ? 'bg-primary text-primary-foreground border-primary/50'
-              : 'bg-card/85 text-muted-foreground border-border'
+              ? 'bg-primary text-primary-foreground glow-amber'
+              : 'glass text-muted-foreground'
           }`}
         >
-          <Radar className="h-3 w-3" />
+          <Radar className="h-3 w-3" strokeWidth={1.8} />
           {geofenceEnabled ? `≤${GEOFENCE_KM}km` : 'Nearby'}
         </button>
       </div>
@@ -317,7 +317,7 @@ export default function DriverHomeView() {
 
       {/* Bottom sheet */}
       <motion.div
-        className="absolute bottom-0 left-0 right-0 z-[1000] bg-background rounded-t-3xl border-t border-border/60 shadow-2xl"
+        className="absolute bottom-0 left-0 right-0 z-[1000] glass-strong rounded-t-3xl shadow-pop"
         style={{ height: `${sheetHeight * 100}vh` }}
         animate={{ height: `${sheetHeight * 100}vh` }}
         transition={{ type: 'spring', damping: 30, stiffness: 300 }}
@@ -355,12 +355,12 @@ export default function DriverHomeView() {
               {/* AI Recommended */}
               {recommendedLoads.length > 0 && (
                 <div>
-                  <div className="flex items-center gap-1.5 mb-2.5 px-1">
-                    <Flame className="h-3.5 w-3.5 text-primary" />
-                    <span className="text-xs font-black text-primary uppercase tracking-wide">AI Recommended</span>
-                    <Badge className="text-[9px] h-4 px-1.5 bg-primary/20 text-primary border-primary/30">
-                      <Sparkles className="h-2.5 w-2.5 mr-0.5" /> Smart
-                    </Badge>
+                  <div className="flex items-center gap-2 mb-3 px-1">
+                    <Flame className="h-3.5 w-3.5 text-primary" strokeWidth={1.8} />
+                    <span className="heavy-label text-primary">AI Recommended</span>
+                    <span className="pill pill-amber">
+                      <Sparkles className="h-2.5 w-2.5" /> Smart
+                    </span>
                   </div>
                   <div className="space-y-2">
                     {recommendedLoads.map((load: any) => (
@@ -380,9 +380,7 @@ export default function DriverHomeView() {
               {/* All other loads */}
               {otherLoads.length > 0 && (
                 <div>
-                  <p className="text-[11px] font-black text-muted-foreground mb-2.5 px-1 uppercase tracking-wide">
-                    New Trip Requests
-                  </p>
+                  <p className="heavy-label mb-3 px-1">New Trip Requests</p>
                   <div className="space-y-2">
                     {otherLoads.map((load: any) => (
                       <LoadCard

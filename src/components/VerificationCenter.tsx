@@ -16,22 +16,22 @@ import { motion, AnimatePresence } from 'framer-motion';
 type DocType = 'drivers_license' | 'national_id' | 'selfie' | 'registration' | 'insurance' | 'truck_photo';
 type VerifStep = 'overview' | 'driver_license' | 'driver_id' | 'driver_selfie' | 'truck_reg' | 'truck_insurance' | 'truck_photo';
 
-const STATUS_CONFIG: Record<string, { icon: React.ElementType; color: string; label: string }> = {
-  pending: { icon: AlertTriangle, color: 'text-warning', label: 'Pending' },
-  processing: { icon: Loader2, color: 'text-primary', label: 'Processing' },
-  verified: { icon: CheckCircle, color: 'text-success', label: 'Verified' },
-  flagged: { icon: XCircle, color: 'text-destructive', label: 'Flagged' },
-  rejected: { icon: XCircle, color: 'text-destructive', label: 'Rejected' },
+const STATUS_CONFIG: Record<string, { icon: React.ElementType; pill: string; label: string }> = {
+  pending: { icon: AlertTriangle, pill: 'pill pill-amber', label: 'Pending' },
+  processing: { icon: Loader2, pill: 'pill pill-amber', label: 'Processing' },
+  verified: { icon: CheckCircle, pill: 'pill pill-success', label: 'Verified' },
+  flagged: { icon: XCircle, pill: 'pill pill-danger', label: 'Flagged' },
+  rejected: { icon: XCircle, pill: 'pill pill-danger', label: 'Rejected' },
 };
 
 function StatusBadge({ status }: { status: string }) {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
   const Icon = cfg.icon;
   return (
-    <Badge variant="outline" className={`gap-1 ${cfg.color} border-current/30`}>
+    <span className={cfg.pill}>
       <Icon className={`h-3 w-3 ${status === 'processing' ? 'animate-spin' : ''}`} />
       {cfg.label}
-    </Badge>
+    </span>
   );
 }
 
@@ -75,18 +75,18 @@ interface DocUploadCardProps {
 function DocUploadCard({ title, description, icon: Icon, status, onClick }: DocUploadCardProps) {
   return (
     <button onClick={onClick} className="w-full text-left">
-      <Card className="hover:border-primary/30 transition-colors">
-        <CardContent className="p-4 flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-muted shrink-0">
-            <Icon className="h-5 w-5 text-muted-foreground" />
+      <Card className="hover:shadow-float transition-shadow">
+        <CardContent className="p-4 flex items-center gap-3.5">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-secondary shrink-0">
+            <Icon className="h-[18px] w-[18px] text-foreground" strokeWidth={1.6} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium">{title}</p>
-            <p className="text-xs text-muted-foreground">{description}</p>
+            <p className="text-[14px] font-semibold tracking-tight">{title}</p>
+            <p className="text-xs text-muted-foreground truncate mt-0.5">{description}</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <StatusBadge status={status} />
-            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            <ChevronRight className="h-4 w-4 text-muted-foreground/60" strokeWidth={1.5} />
           </div>
         </CardContent>
       </Card>

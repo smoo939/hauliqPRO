@@ -30,16 +30,16 @@ L.Icon.Default.mergeOptions({
 });
 
 const pickupIcon = new L.DivIcon({
-  html: `<div style="background:hsl(221,89%,55%);width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3);"><svg width="14" height="14" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="12" r="4"/></svg></div>`,
-  iconSize: [28, 28],
-  iconAnchor: [14, 14],
+  html: `<div style="background:#FBBF24;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid white;box-shadow:0 6px 18px rgba(251,191,36,0.45),0 2px 6px rgba(0,0,0,0.15);"><svg width="14" height="14" viewBox="0 0 24 24" fill="#2D3436"><circle cx="12" cy="12" r="4"/></svg></div>`,
+  iconSize: [30, 30],
+  iconAnchor: [15, 15],
   className: '',
 });
 
 const deliveryIcon = new L.DivIcon({
-  html: `<div style="background:hsl(0,72%,51%);width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3);"><svg width="14" height="14" viewBox="0 0 24 24" fill="white"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></div>`,
-  iconSize: [28, 28],
-  iconAnchor: [14, 14],
+  html: `<div style="background:#2D3436;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid white;box-shadow:0 4px 14px rgba(0,0,0,0.25);"><svg width="13" height="13" viewBox="0 0 24 24" fill="white"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></div>`,
+  iconSize: [30, 30],
+  iconAnchor: [15, 15],
   className: '',
 });
 
@@ -64,12 +64,12 @@ function RecenterMap({ lat, lng }: { lat: number; lng: number }) {
   return null;
 }
 
-const statusColors: Record<string, string> = {
-  posted: 'bg-primary/10 text-primary border-primary/30',
-  accepted: 'bg-primary/10 text-primary border-primary/30',
-  in_transit: 'bg-warning/10 text-warning border-warning/30',
-  delivered: 'bg-success/10 text-success border-success/30',
-  cancelled: 'bg-destructive/10 text-destructive border-destructive/30',
+const statusPill: Record<string, string> = {
+  posted: 'pill pill-amber',
+  accepted: 'pill pill-amber',
+  in_transit: 'pill pill-warning',
+  delivered: 'pill pill-success',
+  cancelled: 'pill pill-danger',
 };
 
 const SNAP_COLLAPSED = 0.12;
@@ -219,20 +219,20 @@ export default function ShipperLiveView() {
         <div className="mx-3 mt-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <AppSidebar role="shipper" />
-            <div className="flex items-center gap-2 bg-card/90 backdrop-blur-md rounded-full px-3 py-2 border border-border shadow-lg">
-              <Navigation className="h-4 w-4 text-primary" />
-              <span className="text-xs font-semibold">Live Control</span>
+            <div className="glass shadow-soft rounded-full px-3.5 py-2 flex items-center gap-2">
+              <Navigation className="h-4 w-4 text-primary" strokeWidth={2} />
+              <span className="text-[12px] font-semibold tracking-tight">Live Control</span>
             </div>
           </div>
-          <Badge variant="outline" className="bg-card/90 backdrop-blur-md border-border shadow-lg text-[10px]">
+          <div className="glass shadow-soft rounded-full px-3 py-1.5 text-[10.5px] font-semibold">
             {loads?.length || 0} active
-          </Badge>
+          </div>
         </div>
       </div>
 
       {/* Draggable bottom sheet */}
       <motion.div
-        className="absolute bottom-0 left-0 right-0 z-[1000] bg-background rounded-t-2xl border-t border-border shadow-2xl"
+        className="absolute bottom-0 left-0 right-0 z-[1000] glass-strong rounded-t-3xl shadow-pop"
         style={{ height: `${sheetHeight * 100}vh` }}
         animate={{ height: `${sheetHeight * 100}vh` }}
         transition={{ type: 'spring', damping: 30, stiffness: 300 }}
@@ -261,30 +261,28 @@ export default function ShipperLiveView() {
           ) : (
             <div className="space-y-2">
               {loads.map((load: any) => (
-                <Card key={load.id} className="overflow-hidden border-border/60 hover:border-primary/30 transition-all cursor-pointer"
+                <Card key={load.id} className="overflow-hidden cursor-pointer hover:shadow-float transition-shadow"
                   onClick={() => setSelectedLoad(load)}>
-                  <CardContent className="p-0">
-                    <div className="flex items-center justify-between px-3 pt-2.5 pb-1.5">
-                      <Badge variant="outline" className={`text-[10px] uppercase tracking-wide font-semibold ${statusColors[load.status] || ''}`}>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className={statusPill[load.status] || 'pill pill-muted'}>
                         {load.status.replace('_', ' ')}
-                      </Badge>
-                      <span className="text-sm font-bold">${Number(load.price || 0).toFixed(0)}</span>
+                      </span>
+                      <span className="text-base font-bold tracking-tight">${Number(load.price || 0).toFixed(0)}</span>
                     </div>
-                    <div className="px-3 pb-2.5">
-                      <div className="flex items-start gap-2.5">
-                        <div className="flex flex-col items-center gap-0.5 pt-1">
-                          <div className="h-2 w-2 rounded-full bg-primary" />
-                          <div className="w-px h-5 bg-border" />
-                          <div className="h-2 w-2 rounded-full border-2 border-destructive" />
-                        </div>
-                        <div className="flex-1 min-w-0 space-y-1">
-                          <p className="text-xs font-medium truncate">{load.pickup_location}</p>
-                          <p className="text-xs font-medium truncate text-muted-foreground">{load.delivery_location}</p>
-                        </div>
+                    <div className="flex items-start gap-3 mb-2">
+                      <div className="flex flex-col items-center gap-0.5 pt-1">
+                        <div className="h-2 w-2 rounded-full bg-primary ring-4 ring-primary/15" />
+                        <div className="w-px h-5 bg-muted" />
+                        <div className="h-2 w-2 rounded-full border-2 border-foreground" />
+                      </div>
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <p className="text-[13px] font-semibold truncate">{load.pickup_location}</p>
+                        <p className="text-[13px] font-medium truncate text-muted-foreground">{load.delivery_location}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 px-3 py-1.5 bg-muted/30 border-t border-border/40 text-[10px] text-muted-foreground">
-                      <span className="font-medium text-foreground truncate">{load.title}</span>
+                    <div className="flex items-center gap-2 pt-2 text-[10.5px] text-muted-foreground">
+                      <span className="font-semibold text-foreground truncate">{load.title}</span>
                       <span className="ml-auto shrink-0">{formatDistanceToNow(new Date(load.created_at), { addSuffix: true })}</span>
                     </div>
                   </CardContent>
@@ -340,39 +338,49 @@ export default function ShipperLiveView() {
         <SheetContent side="bottom" className="h-[85vh] rounded-t-2xl p-0 overflow-hidden">
           {selectedLoad && (
             <div className="flex flex-col h-full">
-              <SheetHeader className="p-4 pb-2 border-b border-border">
-                <div className="flex items-center justify-between">
-                  <SheetTitle className="text-base font-bold">{selectedLoad.title}</SheetTitle>
-                  <Badge variant="outline" className={`text-[10px] uppercase ${statusColors[selectedLoad.status] || ''}`}>
+              <SheetHeader className="p-5 pb-3">
+                <div className="flex items-center justify-between gap-3">
+                  <SheetTitle className="text-lg font-bold tracking-tight truncate">{selectedLoad.title}</SheetTitle>
+                  <span className={statusPill[selectedLoad.status] || 'pill pill-muted'}>
                     {selectedLoad.status.replace('_', ' ')}
-                  </Badge>
+                  </span>
                 </div>
               </SheetHeader>
 
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {/* Route */}
-                <div className="flex items-start gap-3">
-                  <div className="flex flex-col items-center gap-0.5 pt-1">
-                    <div className="h-3 w-3 rounded-full bg-primary" />
-                    <div className="w-px h-8 bg-border" />
-                    <div className="h-3 w-3 rounded-full bg-destructive" />
-                  </div>
-                  <div className="space-y-3">
-                    <div><p className="text-xs text-muted-foreground">Pickup</p><p className="text-sm font-medium">{selectedLoad.pickup_location}</p></div>
-                    <div><p className="text-xs text-muted-foreground">Delivery</p><p className="text-sm font-medium">{selectedLoad.delivery_location}</p></div>
+                {/* Route island */}
+                <div className="island p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="flex flex-col items-center gap-0.5 pt-1">
+                      <div className="h-3 w-3 rounded-full bg-primary ring-4 ring-primary/15" />
+                      <div className="w-px h-8 bg-muted" />
+                      <div className="h-3 w-3 rounded-full border-2 border-foreground" />
+                    </div>
+                    <div className="space-y-3 flex-1 min-w-0">
+                      <div>
+                        <p className="heavy-label">Pickup</p>
+                        <p className="text-sm font-semibold mt-0.5 truncate">{selectedLoad.pickup_location}</p>
+                      </div>
+                      <div>
+                        <p className="heavy-label">Delivery</p>
+                        <p className="text-sm font-semibold mt-0.5 truncate">{selectedLoad.delivery_location}</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                {/* Details */}
+                {/* Details — islands */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-muted rounded-lg p-3">
-                    <p className="text-xs text-muted-foreground mb-1">Price</p>
-                    <p className="text-lg font-black text-primary">${Number(selectedLoad.price || 0).toLocaleString()}</p>
+                  <div className="island p-4">
+                    <p className="heavy-label">Price</p>
+                    <p className="text-2xl font-bold text-foreground tracking-tight mt-1">
+                      ${Number(selectedLoad.price || 0).toLocaleString()}
+                    </p>
                   </div>
                   {selectedLoad.pickup_date && (
-                    <div className="bg-muted rounded-lg p-3">
-                      <p className="text-xs text-muted-foreground mb-1">Pickup</p>
-                      <p className="text-sm font-semibold">{format(new Date(selectedLoad.pickup_date), 'MMM d, yyyy')}</p>
+                    <div className="island p-4">
+                      <p className="heavy-label">Pickup date</p>
+                      <p className="text-sm font-semibold mt-1.5">{format(new Date(selectedLoad.pickup_date), 'MMM d, yyyy')}</p>
                     </div>
                   )}
                 </div>

@@ -61,3 +61,15 @@ Hauliq is a logistics/freight marketplace for Zimbabwe built with React + TypeSc
 - Workflow `Start application` runs `npm run dev` on port 5000.
 - App verified running in Replit preview without runtime errors.
 - Phase 3 changes tested and visible in preview.
+
+### Phase 4 — Soft Neutral iOS Redesign
+- **Design system**: New "Soft Neutral" palette in `src/index.css` & `tailwind.config.ts` — bg `#F8F9FA`, charcoal text `#2D3436`, amber `#FBBF24` reserved exclusively for primary CTAs, status highlights, and active map routes. Cards now use `rounded-xl` (20px), no 1px borders, and `shadow-soft` (0 10px 30px rgba(0,0,0,0.04)).
+- **Utilities**: Added `.glass`, `.glass-strong` (frosted), `.island` (info groupings), `.shadow-soft/float/pop`, `.glow-amber`, `.route-glow`, `.heavy-label`, plus pill classes (`.pill`, `.pill-amber`, `.pill-success`, `.pill-warning`, `.pill-danger`, `.pill-muted`, `.pill-charcoal`). Legacy `.bento-card`, `.industrial-border`, `.amber-badge` aliased to soft equivalents.
+- **Base UI**: `card.tsx` (rounded-xl, shadow-soft, no border), `button.tsx` (rounded-full, soft+charcoal variants), `badge.tsx` (soft pill variants), `input.tsx` (rounded-2xl, secondary fill, no border).
+- **Navigation**: `BottomTabs` rebuilt as floating frosted-glass pill nav with thin-stroke icons. `AppSidebar` trigger uses glass pill, profile avatar gets `glow-amber`.
+- **Map**: `LiveTrackingMap` shows triple-stroke glowing amber Polyline + amber truck pin; floating glass LIVE pill, last-update pill, and inset bottom tracking card with ETA/speed/distance. `DriverHomeView` & `ShipperLiveView` use grayscale tile base + amber/charcoal markers.
+- **Loadboard**: `driver/LoadCard` rebuilt spacious with horizontal Processing → Transit → Delivered amber dot/line progress and soft pills.
+- **Verification**: `VerificationCenter` `StatusBadge` now soft pill spans (pale amber Pending). `DocUploadCard` uses secondary icon tile + bold title + status pill.
+- **Settings**: `SettingItem` is rounded-2xl with secondary background; sidebar items use soft hover.
+- **Auth/Onboarding**: `AuthPage` card uses `shadow-float`, role toggles are rounded-2xl pills with amber ring when selected. `RoleSelectPage` cards lose heavy borders, gain amber-glow icon tiles.
+- **Theme**: Light is the default theme (`useTheme` defaults to 'light'); dark mode is a soft premium dark (not industrial).

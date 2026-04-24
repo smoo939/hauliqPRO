@@ -14,12 +14,12 @@ export default function DriverWorkView() {
     .filter((bid) => bid.driver_id === user?.id)
     .map((bid) => ({ ...bid, loads: loads.find((load) => load.id === bid.load_id) || null }));
 
-  const statusColor = (s: string) => {
+  const statusPillCls = (s: string) => {
     switch (s) {
-      case 'accepted': return 'bg-green-500/10 text-green-500 border-green-500/20';
-      case 'rejected': return 'bg-destructive/10 text-destructive border-destructive/20';
-      case 'synced': return 'bg-success/10 text-success border-success/20';
-      default: return 'bg-warning/10 text-warning border-warning/20';
+      case 'accepted': return 'pill pill-success';
+      case 'rejected': return 'pill pill-danger';
+      case 'synced': return 'pill pill-success';
+      default: return 'pill pill-amber';
     }
   };
 
@@ -64,10 +64,10 @@ export default function DriverWorkView() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0 space-y-1.5">
                       <div className="flex items-center gap-2">
-                        <Badge className={`text-[10px] px-1.5 py-0 h-5 border ${statusColor(bid.status)}`}>
-                          {bid.status === 'synced' ? <CheckCheck className="h-3 w-3 mr-1" /> : <Clock className="h-3 w-3 mr-1" />}
+                        <span className={statusPillCls(bid.status)}>
+                          {bid.status === 'synced' ? <CheckCheck className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
                           {statusLabel(bid.status)}
-                        </Badge>
+                        </span>
                       </div>
                       {bid.loads && (
                         <>
@@ -85,8 +85,8 @@ export default function DriverWorkView() {
                       )}
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="text-lg font-black text-primary">${bid.amount.toLocaleString()}</p>
-                      <p className="text-[10px] text-muted-foreground">Your bid</p>
+                      <p className="text-lg font-bold text-foreground tracking-tight">${bid.amount.toLocaleString()}</p>
+                      <p className="heavy-label">Your bid</p>
                     </div>
                   </div>
                 </CardContent>

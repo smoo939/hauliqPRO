@@ -1,10 +1,9 @@
-import { CheckCircle, Circle, Truck, MapPin, Flag, Navigation } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const milestones = [
-  { key: 'accepted', label: 'Dispatched', icon: Truck },
-  { key: 'in_transit', label: 'In Transit', icon: Navigation },
-  { key: 'delivered', label: 'Delivered', icon: Flag },
+  { key: 'accepted', label: 'Processing' },
+  { key: 'in_transit', label: 'Transit' },
+  { key: 'delivered', label: 'Delivered' },
 ];
 
 const statusOrder = ['posted', 'accepted', 'in_transit', 'delivered'];
@@ -17,43 +16,57 @@ export default function StatusMilestones({ currentStatus }: StatusMilestonesProp
   const currentIndex = statusOrder.indexOf(currentStatus);
 
   return (
-    <div className="flex items-center gap-1 w-full py-2">
-      {milestones.map((m, i) => {
-        const stepIndex = statusOrder.indexOf(m.key);
-        const isComplete = currentIndex >= stepIndex;
-        const isCurrent = currentStatus === m.key;
-        const Icon = m.icon;
-
-        return (
-          <div key={m.key} className="flex items-center flex-1">
-            <div className="flex flex-col items-center gap-1">
-              <div
-                className={cn(
-                  'flex h-8 w-8 items-center justify-center rounded-full border-2 transition-all',
-                  isComplete
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-border bg-card text-muted-foreground',
-                  isCurrent && 'animate-pulse-glow'
-                )}
-              >
-                <Icon className="h-3.5 w-3.5" />
+    <div className="w-full">
+      {/* dot + line track */}
+      <div className="flex items-center w-full">
+        {milestones.map((m, i) => {
+          const stepIndex = statusOrder.indexOf(m.key);
+          const isComplete = currentIndex >= stepIndex;
+          const isCurrent = currentStatus === m.key;
+          return (
+            <div key={m.key} className="flex items-center flex-1 last:flex-initial">
+              <div className="flex items-center justify-center">
+                <span
+                  className={cn(
+                    'block rounded-full transition-all',
+                    isCurrent
+                      ? 'h-3 w-3 bg-primary ring-4 ring-primary/20'
+                      : isComplete
+                        ? 'h-2.5 w-2.5 bg-primary'
+                        : 'h-2.5 w-2.5 bg-muted',
+                  )}
+                />
               </div>
-              <span className={cn(
-                'text-[10px] font-medium',
-                isComplete ? 'text-primary' : 'text-muted-foreground'
-              )}>
-                {m.label}
-              </span>
+              {i < milestones.length - 1 && (
+                <div
+                  className={cn(
+                    'flex-1 h-[3px] mx-1.5 rounded-full',
+                    currentIndex > stepIndex ? 'bg-primary' : 'bg-muted',
+                  )}
+                />
+              )}
             </div>
-            {i < milestones.length - 1 && (
-              <div className={cn(
-                'flex-1 h-0.5 mx-1 rounded-full mt-[-14px]',
-                currentIndex > stepIndex ? 'bg-primary' : 'bg-border'
-              )} />
-            )}
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
+      {/* labels — aligned with dots */}
+      <div className="flex justify-between mt-2 px-[2px]">
+        {milestones.map((m) => {
+          const stepIndex = statusOrder.indexOf(m.key);
+          const isComplete = currentIndex >= stepIndex;
+          return (
+            <span
+              key={m.key}
+              className={cn(
+                'text-[11px] font-medium tracking-tight',
+                isComplete ? 'text-foreground' : 'text-muted-foreground',
+              )}
+            >
+              {m.label}
+            </span>
+          );
+        })}
+      </div>
     </div>
   );
 }

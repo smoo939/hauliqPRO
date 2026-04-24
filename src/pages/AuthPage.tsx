@@ -123,7 +123,7 @@ export default function AuthPage() {
           <h1 className="text-3xl font-black tracking-tight text-foreground">Hauliq</h1>
         </div>
 
-        <Card className="border-border/60 bg-card">
+        <Card className="bg-card shadow-float">
           <CardHeader className="pb-4">
             <div className="flex items-center gap-2">
               {isSignUp && step === 2 && (
@@ -178,18 +178,18 @@ export default function AuthPage() {
                           <button
                             type="button"
                             onClick={() => setRole('shipper')}
-                            className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-sm font-semibold transition-all ${role === 'shipper' ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-card text-muted-foreground hover:border-primary/40'}`}
+                            className={`flex flex-col items-center gap-2 rounded-2xl p-4 text-sm font-semibold transition-all shadow-soft ${role === 'shipper' ? 'bg-primary/12 text-foreground ring-2 ring-primary' : 'bg-secondary text-muted-foreground hover:bg-muted'}`}
                           >
-                            <Package className="h-6 w-6" />
+                            <Package className="h-6 w-6" strokeWidth={1.6} />
                             <span>Shipper</span>
                             <span className="text-[10px] font-normal opacity-70">I need to move cargo</span>
                           </button>
                           <button
                             type="button"
                             onClick={() => setRole('driver')}
-                            className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-sm font-semibold transition-all ${role === 'driver' ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-card text-muted-foreground hover:border-primary/40'}`}
+                            className={`flex flex-col items-center gap-2 rounded-2xl p-4 text-sm font-semibold transition-all shadow-soft ${role === 'driver' ? 'bg-primary/12 text-foreground ring-2 ring-primary' : 'bg-secondary text-muted-foreground hover:bg-muted'}`}
                           >
-                            <Truck className="h-6 w-6" />
+                            <Truck className="h-6 w-6" strokeWidth={1.6} />
                             <span>Carrier</span>
                             <span className="text-[10px] font-normal opacity-70">I have a truck</span>
                           </button>
@@ -259,7 +259,7 @@ export default function AuthPage() {
                     </Label>
                     <select
                       id="truckType"
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      className="w-full rounded-2xl bg-secondary px-4 py-2.5 text-sm font-medium shadow-soft focus:outline-none focus:ring-2 focus:ring-ring"
                       value={truckType}
                       onChange={e => setTruckType(e.target.value)}
                       required

@@ -13,7 +13,7 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
     const stored = localStorage.getItem('hauliq-theme') as Theme | null;
-    return stored || 'dark';
+    return stored || 'light';
   });
 
   const resolvedTheme = theme === 'system'

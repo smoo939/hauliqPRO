@@ -90,26 +90,26 @@ export default function AppSidebar({ role }: AppSidebarProps) {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <button className="flex h-9 w-9 items-center justify-center rounded-xl bg-card/90 backdrop-blur-md border border-border shadow-lg">
-          <Menu className="h-4 w-4 text-foreground" />
+        <button className="flex h-10 w-10 items-center justify-center rounded-2xl glass shadow-soft">
+          <Menu className="h-4 w-4 text-foreground" strokeWidth={1.8} />
         </button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-[280px] p-0 flex flex-col">
+      <SheetContent side="left" className="w-[300px] p-0 flex flex-col bg-background">
         {/* Profile header */}
         <div className="p-5 pb-3 shrink-0">
           <SheetHeader className="text-left">
             <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">
-                <User className="h-6 w-6 text-primary" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary glow-amber">
+                <User className="h-6 w-6 text-primary-foreground" strokeWidth={1.8} />
               </div>
               <div className="flex-1 min-w-0">
-                <SheetTitle className="text-sm font-bold truncate">
+                <SheetTitle className="text-[15px] font-bold truncate tracking-tight">
                   {profile?.full_name || 'User'}
                 </SheetTitle>
                 <p className="text-[11px] text-muted-foreground truncate">{user?.email}</p>
-                <Badge variant="outline" className="capitalize text-[10px] mt-1">
+                <span className="pill pill-amber capitalize mt-1">
                   {role === 'driver' ? 'Carrier' : 'Shipper'}
-                </Badge>
+                </span>
               </div>
             </div>
           </SheetHeader>
@@ -123,11 +123,11 @@ export default function AppSidebar({ role }: AppSidebarProps) {
             <button
               key={item.label}
               onClick={() => go(item.path)}
-              className="flex items-center gap-3 w-full px-5 py-3 text-left hover:bg-muted/50 active:bg-muted transition-colors"
+              className="flex items-center gap-3 w-full px-5 py-3 text-left hover:bg-secondary active:bg-muted transition-colors"
             >
-              <item.icon className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium flex-1">{item.label}</span>
-              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />
+              <item.icon className="h-[18px] w-[18px] text-foreground" strokeWidth={1.6} />
+              <span className="text-[14px] font-medium flex-1">{item.label}</span>
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" strokeWidth={1.5} />
             </button>
           ))}
 
@@ -135,10 +135,10 @@ export default function AppSidebar({ role }: AppSidebarProps) {
           <button
             onClick={handleSwitchRole}
             disabled={switching}
-            className="flex items-center gap-3 w-full px-5 py-3 text-left hover:bg-muted/50 active:bg-muted transition-colors"
+            className="flex items-center gap-3 w-full px-5 py-3 text-left hover:bg-secondary active:bg-muted transition-colors"
           >
-            <ArrowLeftRight className="h-4 w-4 text-primary" />
-            <span className="text-sm font-medium flex-1">
+            <ArrowLeftRight className="h-[18px] w-[18px] text-primary" strokeWidth={1.8} />
+            <span className="text-[14px] font-medium flex-1">
               Switch to {role === 'driver' ? 'Shipper' : 'Carrier'}
             </span>
             {switching ? (
@@ -150,18 +150,18 @@ export default function AppSidebar({ role }: AppSidebarProps) {
         </div>
 
         {/* Sticky bottom: dark mode + sign out */}
-        <div className="shrink-0 border-t border-border bg-card/95 backdrop-blur-sm p-3 space-y-1">
+        <div className="shrink-0 bg-card/95 backdrop-blur-sm p-3 space-y-1">
           <button
             onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-            className="flex items-center justify-between w-full px-2 py-2.5 rounded-lg hover:bg-muted/50 transition-colors"
+            className="flex items-center justify-between w-full px-3 py-2.5 rounded-2xl hover:bg-secondary transition-colors"
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               {resolvedTheme === 'dark' ? (
-                <Moon className="h-4 w-4 text-muted-foreground" />
+                <Moon className="h-[18px] w-[18px] text-foreground" strokeWidth={1.6} />
               ) : (
-                <Sun className="h-4 w-4 text-muted-foreground" />
+                <Sun className="h-[18px] w-[18px] text-foreground" strokeWidth={1.6} />
               )}
-              <span className="text-sm">Dark Mode</span>
+              <span className="text-[14px] font-medium">Dark Mode</span>
             </div>
             <Switch
               checked={resolvedTheme === 'dark'}
