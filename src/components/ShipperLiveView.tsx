@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
@@ -11,12 +11,11 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import {
-  AlertTriangle, Package, MessageCircle, XCircle, Satellite,
-  Bell, Search, Plus, Navigation as NavIcon, Eye, EyeOff,
-  Box, ChevronRight, MapPin,
+  AlertTriangle, MessageCircle, XCircle, Satellite,
+  Search, Filter, Package, ChevronUp, ChevronDown, MapPin,
 } from 'lucide-react';
 import AppSidebar from '@/components/AppSidebar';
-import { motion } from 'framer-motion';
+import { motion, useMotionValue, animate } from 'framer-motion';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import LoadChat from '@/components/LoadChat';
@@ -24,6 +23,14 @@ import StatusMilestones from '@/components/StatusMilestones';
 import { BidList } from '@/components/BidSystem';
 import LiveTrackingMap from '@/components/LiveTrackingMap';
 import ShipmentCard from '@/components/shared/ShipmentCard';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 // Leaflet defaults
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -34,9 +41,9 @@ L.Icon.Default.mergeOptions({
 });
 
 const pickupIcon = new L.DivIcon({
-  html: `<div style="background:#FBBF24;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid white;box-shadow:0 6px 18px rgba(251,191,36,0.45),0 2px 6px rgba(0,0,0,0.15);"><span style="width:6px;height:6px;background:#2D3436;border-radius:50%"></span></div>`,
-  iconSize: [24, 24],
-  iconAnchor: [12, 12],
+  html: `<div style="background:#FBBF24;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid white;box-shadow:0 6px 18px rgba(251,191,36,0.45),0 2px 6px rgba(0,0,0,0.15);"><span style="width:6px;height:6px;background:#2D3436;border-radius:50%"></span></div>`,
+  iconSize: [26, 26],
+  iconAnchor: [13, 13],
   className: '',
 });
 const deliveryIcon = new L.DivIcon({
@@ -89,14 +96,20 @@ function FitBounds({ points }: { points: [number, number][] }) {
     if (points.length === 1) {
       map.setView(points[0], 11, { animate: true });
     } else {
-      map.fitBounds(L.latLngBounds(points), { padding: [30, 30], maxZoom: 11 });
+      map.fitBounds(L.latLngBounds(points), { padding: [40, 40], maxZoom: 11 });
     }
   }, [points, map]);
   return null;
 }
 
+const SNAP_COLLAPSED = 132;
+const SNAP_HALF = 0.5;
+const SNAP_FULL = 0.78;
+
+const STATUS_FILTERS = ['posted', 'accepted', 'in_transit'] as const;
+
 export default function ShipperLiveView() {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -104,9 +117,41 @@ export default function ShipperLiveView() {
   const [showChat, setShowChat] = useState(false);
   const [geoShipments, setGeoShipments] = useState<GeoShipment[]>([]);
   const [showLiveMap, setShowLiveMap] = useState(false);
-  const [hideValue, setHideValue] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string[]>([...STATUS_FILTERS]);
   const [mismatchPending, setMismatchPending] = useState<{ bidId: string; driverId: string; amount: number; loadId: string } | null>(null);
   const [mismatchInfo, setMismatchInfo] = useState<{ driverTruck: string; requiredTruck: string; plate: string } | null>(null);
+
+  const [vh, setVh] = useState(typeof window !== 'undefined' ? window.innerHeight : 800);
+  useEffect(() => {
+    const onResize = () => setVh(window.innerHeight);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  const snaps = useMemo(() => ({
+    collapsed: SNAP_COLLAPSED,
+    half: Math.round(vh * SNAP_HALF),
+    full: Math.round(vh * SNAP_FULL),
+  }), [vh]);
+
+  const sheetHeight = useMotionValue(snaps.half);
+  const [snapState, setSnapState] = useState<'collapsed' | 'half' | 'full'>('half');
+
+  useEffect(() => {
+    animate(sheetHeight, snaps[snapState], { type: 'spring', damping: 30, stiffness: 280 });
+  }, [snaps, snapState, sheetHeight]);
+
+  const snapTo = (state: 'collapsed' | 'half' | 'full') => {
+    setSnapState(state);
+    animate(sheetHeight, snaps[state], { type: 'spring', damping: 30, stiffness: 280 });
+  };
+
+  const cycleSheet = () => {
+    if (snapState === 'collapsed') snapTo('half');
+    else if (snapState === 'half') snapTo('full');
+    else snapTo('collapsed');
+  };
 
   const { data: loads, isLoading } = useQuery({
     queryKey: ['shipper-live-loads', user?.id],
@@ -134,14 +179,13 @@ export default function ShipperLiveView() {
     return () => { supabase.removeChannel(channel); };
   }, [queryClient]);
 
-  // Geocode (only first 8 for the inset preview map)
+  // Geocode
   useEffect(() => {
     if (!loads?.length) { setGeoShipments([]); return; }
-    const slice = loads.slice(0, 8);
     const geo = async () => {
       const results: GeoShipment[] = [];
-      for (let i = 0; i < slice.length; i += 3) {
-        const batch = slice.slice(i, i + 3);
+      for (let i = 0; i < loads.length; i += 3) {
+        const batch = loads.slice(i, i + 3);
         const geos = await Promise.all(batch.map(async (load: any) => {
           const [pickup, delivery] = await Promise.all([
             geocode(load.pickup_location),
@@ -150,7 +194,7 @@ export default function ShipperLiveView() {
           return { load, pickup: pickup || undefined, delivery: delivery || undefined } as GeoShipment;
         }));
         results.push(...geos);
-        if (i + 3 < slice.length) await new Promise(r => setTimeout(r, 1100));
+        if (i + 3 < loads.length) await new Promise(r => setTimeout(r, 1100));
       }
       setGeoShipments(results);
     };
@@ -201,19 +245,24 @@ export default function ShipperLiveView() {
     }
   }, [loads, selectedLoad, acceptBid]);
 
-  // Aggregate stats
-  const stats = useMemo(() => {
-    if (!loads) return { active: 0, transit: 0, value: 0 };
-    return {
-      active: loads.length,
-      transit: loads.filter((l: any) => l.status === 'in_transit').length,
-      value: loads.reduce((sum: number, l: any) => sum + Number(l.price || 0), 0),
-    };
-  }, [loads]);
+  const filteredLoads = useMemo(() => {
+    if (!loads) return [];
+    return loads.filter((l: any) => {
+      if (!statusFilter.includes(l.status)) return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const match =
+          l.pickup_location?.toLowerCase().includes(q) ||
+          l.delivery_location?.toLowerCase().includes(q) ||
+          l.title?.toLowerCase().includes(q) ||
+          l.tracking_code?.toLowerCase().includes(q);
+        if (!match) return false;
+      }
+      return true;
+    });
+  }, [loads, searchQuery, statusFilter]);
 
-  const firstName = (profile?.full_name || user?.email || 'There').split(' ')[0];
-  const initials = (profile?.full_name || user?.email || 'U')
-    .split(' ').map((s: string) => s[0]).slice(0, 2).join('').toUpperCase();
+  const featuredLoad = filteredLoads[0];
 
   const mapPoints: [number, number][] = useMemo(() => {
     const pts: [number, number][] = [];
@@ -224,211 +273,169 @@ export default function ShipperLiveView() {
     return pts;
   }, [geoShipments]);
 
+  const mapCenter = geoShipments[0]?.pickup || { lat: -19.0154, lng: 29.1549 };
+
   return (
-    <div className="min-h-screen bg-background pb-28">
-      {/* Frosted-glass scrolling header */}
-      <header className="sticky top-0 z-40 backdrop-blur-xl bg-background/70 px-5 pt-5 pb-4 safe-top">
-        <div className="flex items-center gap-3">
-          <AppSidebar role="shipper" />
-          <div className="h-11 w-11 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold tracking-tight shadow-soft shrink-0">
-            {initials}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground font-semibold">Shipper</p>
-            <p className="text-[15px] font-bold tracking-tight text-foreground truncate">
-              Hi, {firstName}
-            </p>
-          </div>
-          <button
-            className="h-11 w-11 rounded-full bg-card shadow-soft flex items-center justify-center"
-            aria-label="Search"
-          >
-            <Search className="h-[18px] w-[18px] text-foreground" strokeWidth={1.8} />
-          </button>
-          <button
-            className="h-11 w-11 rounded-full bg-card shadow-soft flex items-center justify-center relative"
-            aria-label="Notifications"
-          >
-            <Bell className="h-[18px] w-[18px] text-foreground" strokeWidth={1.8} />
-            {stats.transit > 0 && (
-              <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-primary ring-2 ring-card" />
+    <div className="fixed inset-0 z-0">
+      {/* Full-screen zoomable map */}
+      <MapContainer
+        center={[mapCenter.lat, mapCenter.lng]}
+        zoom={7}
+        style={{ height: '100%', width: '100%' }}
+        zoomControl={false}
+        attributionControl={false}
+      >
+        <DynamicTileLayer />
+        {mapPoints.length > 0 && <FitBounds points={mapPoints} />}
+        {geoShipments.map((gs) => (
+          <span key={gs.load.id}>
+            {gs.pickup && (
+              <Marker
+                position={[gs.pickup.lat, gs.pickup.lng]}
+                icon={pickupIcon}
+                eventHandlers={{ click: () => setSelectedLoad(gs.load) }}
+              />
             )}
-          </button>
-        </div>
-      </header>
+            {gs.delivery && (
+              <Marker
+                position={[gs.delivery.lat, gs.delivery.lng]}
+                icon={deliveryIcon}
+                eventHandlers={{ click: () => setSelectedLoad(gs.load) }}
+              />
+            )}
+          </span>
+        ))}
+      </MapContainer>
 
-      <main className="px-5 mt-2 space-y-5">
-        {/* Hero balance island */}
-        <section className="bg-card rounded-[32px] shadow-soft p-6">
-          <div className="flex items-end justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground font-semibold">
-                Total shipment value
-              </p>
-              <div className="mt-1 flex items-baseline gap-2">
-                <p className="text-[40px] leading-none font-bold tracking-tight text-foreground">
-                  {hideValue ? '••••••' : `$${stats.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
-                </p>
-                <button
-                  className="text-muted-foreground"
-                  onClick={() => setHideValue(v => !v)}
-                  aria-label="Toggle value"
-                >
-                  {hideValue
-                    ? <EyeOff className="h-[18px] w-[18px]" strokeWidth={1.8} />
-                    : <Eye className="h-[18px] w-[18px]" strokeWidth={1.8} />}
-                </button>
-              </div>
-              <p className="mt-2 text-[12px] text-muted-foreground">
-                <span className="font-semibold text-foreground">{stats.active}</span> active ·{' '}
-                <span className="font-semibold text-foreground">{stats.transit}</span> in transit
-              </p>
-            </div>
-            <button
-              onClick={() => navigate('/shipper/create')}
-              className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-primary text-primary-foreground px-4 py-2.5 font-semibold text-[13px] shadow-soft active:scale-[0.97] transition-transform"
-            >
-              <Plus className="h-4 w-4" strokeWidth={2.4} />
-              Post Load
-            </button>
+      {/* Top bar: sidebar + search + filter */}
+      <div className="absolute top-0 left-0 right-0 z-[1000] safe-top">
+        <div className="mx-3 mt-3 flex items-center gap-2">
+          <div className="h-11 w-11 rounded-full bg-card shadow-soft flex items-center justify-center shrink-0 [&_button]:!bg-transparent [&_button]:!shadow-none [&_button]:!h-11 [&_button]:!w-11">
+            <AppSidebar role="shipper" />
           </div>
-        </section>
-
-        {/* Quick action pills */}
-        <section className="grid grid-cols-2 gap-3">
-          <button
-            onClick={() => navigate('/shipper/create')}
-            className="bg-card rounded-[28px] shadow-soft p-4 flex items-center gap-3 active:scale-[0.98] transition-transform text-left"
-          >
-            <div className="h-10 w-10 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
-              <Plus className="h-[18px] w-[18px] text-amber-700 dark:text-amber-300" strokeWidth={2} />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[13px] font-semibold tracking-tight text-foreground">New Load</p>
-              <p className="text-[11px] text-muted-foreground truncate">Post freight to carriers</p>
-            </div>
-          </button>
-          <button
-            onClick={() => navigate('/shipper/shipments')}
-            className="bg-card rounded-[28px] shadow-soft p-4 flex items-center gap-3 active:scale-[0.98] transition-transform text-left"
-          >
-            <div className="h-10 w-10 rounded-full bg-secondary flex items-center justify-center shrink-0">
-              <NavIcon className="h-[18px] w-[18px] text-foreground" strokeWidth={1.8} />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[13px] font-semibold tracking-tight text-foreground">Track all</p>
-              <p className="text-[11px] text-muted-foreground truncate">View every shipment</p>
-            </div>
-          </button>
-        </section>
-
-        {/* Inset map card */}
-        {mapPoints.length > 0 && (
-          <section className="bg-card rounded-[32px] shadow-soft overflow-hidden">
-            <div className="relative">
-              <div className="h-48">
-                <MapContainer
-                  center={mapPoints[0]}
-                  zoom={7}
-                  style={{ height: '100%', width: '100%' }}
-                  zoomControl={false}
-                  attributionControl={false}
-                  scrollWheelZoom={false}
-                  doubleClickZoom={false}
-                  dragging={false}
-                  touchZoom={false}
-                >
-                  <DynamicTileLayer />
-                  <FitBounds points={mapPoints} />
-                  {geoShipments.map((gs) => (
-                    <span key={gs.load.id}>
-                      {gs.pickup && (
-                        <Marker
-                          position={[gs.pickup.lat, gs.pickup.lng]}
-                          icon={pickupIcon}
-                          eventHandlers={{ click: () => setSelectedLoad(gs.load) }}
-                        />
-                      )}
-                      {gs.delivery && (
-                        <Marker
-                          position={[gs.delivery.lat, gs.delivery.lng]}
-                          icon={deliveryIcon}
-                          eventHandlers={{ click: () => setSelectedLoad(gs.load) }}
-                        />
-                      )}
-                    </span>
-                  ))}
-                </MapContainer>
-              </div>
-              <div className="absolute top-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-card/90 backdrop-blur px-3 py-1.5 shadow-soft">
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-                </span>
-                <span className="text-[10.5px] font-semibold tracking-tight text-foreground">LIVE</span>
-              </div>
+          <div className="flex-1 flex items-center gap-2 bg-card rounded-full shadow-soft px-4 h-11">
+            <Search className="h-[16px] w-[16px] text-muted-foreground shrink-0" strokeWidth={1.8} />
+            <input
+              placeholder="Search shipments…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="flex-1 bg-transparent border-0 outline-none text-[13px] font-medium placeholder:text-muted-foreground/60 min-w-0"
+            />
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <button
-                onClick={() => navigate('/shipper/shipments')}
-                className="absolute bottom-3 right-3 inline-flex items-center gap-1 rounded-full bg-foreground/90 backdrop-blur text-background px-3 py-1.5 text-[11px] font-semibold shadow-soft"
+                aria-label="Filter"
+                className="h-11 w-11 rounded-full bg-card shadow-soft flex items-center justify-center shrink-0"
               >
-                Open map
-                <ChevronRight className="h-3 w-3" strokeWidth={2.4} />
+                <Filter className="h-[18px] w-[18px] text-foreground" strokeWidth={1.8} />
               </button>
-            </div>
-          </section>
-        )}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48 rounded-2xl shadow-pop">
+              <DropdownMenuLabel className="text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground font-semibold">
+                Status
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {STATUS_FILTERS.map((s) => (
+                <DropdownMenuCheckboxItem
+                  key={s}
+                  checked={statusFilter.includes(s)}
+                  onCheckedChange={(checked) => {
+                    setStatusFilter((prev) =>
+                      checked ? [...prev, s] : prev.filter((x) => x !== s)
+                    );
+                  }}
+                  className="text-[13px] font-medium"
+                >
+                  {STATUS_LABEL[s]}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
 
-        {/* Current Shipment section */}
-        <section>
-          <div className="flex items-baseline justify-between mb-3 px-1">
-            <h2 className="text-[18px] font-bold tracking-tight text-foreground">Current Shipment</h2>
-            <button
-              onClick={() => navigate('/shipper/shipments')}
-              className="text-[12px] font-semibold text-amber-700 dark:text-amber-300 inline-flex items-center gap-0.5"
-            >
-              See all <ChevronRight className="h-3 w-3" strokeWidth={2.4} />
-            </button>
-          </div>
-
+      {/* Bottom sheet (3 snap states) */}
+      <DraggableSheet
+        height={sheetHeight}
+        snaps={snaps}
+        onSnap={snapTo}
+        snapState={snapState}
+        cycleSheet={cycleSheet}
+      >
+        <div className="px-4 pb-28">
           {isLoading ? (
-            <div className="bg-card rounded-[28px] shadow-soft p-8 flex justify-center">
+            <div className="flex justify-center py-10">
               <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             </div>
-          ) : !loads?.length ? (
-            <div className="bg-card rounded-[32px] shadow-soft p-10 text-center">
-              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary">
-                <Box className="h-7 w-7 text-muted-foreground" strokeWidth={1.6} />
+          ) : filteredLoads.length === 0 ? (
+            <div className="flex flex-col items-center py-10 text-center">
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-secondary">
+                <Package className="h-6 w-6 text-muted-foreground" strokeWidth={1.6} />
               </div>
-              <p className="text-[15px] font-bold tracking-tight">No active shipments</p>
-              <p className="text-[12px] text-muted-foreground mt-1">Create a load to get started</p>
-              <Button
-                className="mt-5 rounded-full px-5"
-                onClick={() => navigate('/shipper/create')}
-              >
-                <Plus className="h-4 w-4 mr-1.5" strokeWidth={2.4} />
-                Post your first load
-              </Button>
+              <p className="text-[14px] font-bold tracking-tight">No active shipments</p>
+              <p className="text-[12px] text-muted-foreground mt-1">
+                {searchQuery ? 'No matches for your search' : 'Create a load to get started'}
+              </p>
+              {!searchQuery && (
+                <Button
+                  className="mt-4 rounded-full"
+                  size="sm"
+                  onClick={() => navigate('/shipper/create')}
+                >
+                  Post your first load
+                </Button>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
-              {loads.slice(0, 6).map((load: any) => (
-                <ShipmentCard
-                  key={load.id}
-                  id={load.tracking_code || load.id.slice(0, 8).toUpperCase()}
-                  title={load.title || load.equipment_type || 'Shipment'}
-                  status={load.status}
-                  pickupLocation={load.pickup_location}
-                  deliveryLocation={load.delivery_location}
-                  pickupDate={load.pickup_date}
-                  deliveryDate={load.delivery_date}
-                  price={load.price}
-                  onClick={() => setSelectedLoad(load)}
-                />
-              ))}
+              {featuredLoad && (
+                <div>
+                  {snapState !== 'collapsed' && (
+                    <p className="text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground font-semibold mb-2">
+                      Featured shipment
+                    </p>
+                  )}
+                  <ShipmentCard
+                    id={featuredLoad.tracking_code || featuredLoad.id.slice(0, 8).toUpperCase()}
+                    title={featuredLoad.title || featuredLoad.equipment_type || 'Shipment'}
+                    status={featuredLoad.status}
+                    pickupLocation={featuredLoad.pickup_location}
+                    deliveryLocation={featuredLoad.delivery_location}
+                    pickupDate={featuredLoad.pickup_date}
+                    deliveryDate={featuredLoad.delivery_date}
+                    price={featuredLoad.price}
+                    onClick={() => setSelectedLoad(featuredLoad)}
+                  />
+                </div>
+              )}
+
+              {snapState !== 'collapsed' && filteredLoads.length > 1 && (
+                <div className="space-y-3">
+                  <p className="text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground font-semibold pt-1 flex items-center justify-between">
+                    <span>All shipments</span>
+                    <span className="text-foreground">{filteredLoads.length - 1}</span>
+                  </p>
+                  {filteredLoads.slice(1).map((load: any) => (
+                    <ShipmentCard
+                      key={load.id}
+                      id={load.tracking_code || load.id.slice(0, 8).toUpperCase()}
+                      title={load.title || load.equipment_type || 'Shipment'}
+                      status={load.status}
+                      pickupLocation={load.pickup_location}
+                      deliveryLocation={load.delivery_location}
+                      pickupDate={load.pickup_date}
+                      deliveryDate={load.delivery_date}
+                      price={load.price}
+                      onClick={() => setSelectedLoad(load)}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           )}
-        </section>
-      </main>
+        </div>
+      </DraggableSheet>
 
       {/* Truck type mismatch warning dialog */}
       <Dialog open={!!mismatchPending} onOpenChange={(o) => !o && setMismatchPending(null)}>
@@ -492,7 +499,6 @@ export default function ShipperLiveView() {
               </SheetHeader>
 
               <div className="flex-1 overflow-y-auto px-5 pb-6 space-y-4">
-                {/* Route island */}
                 <div className="bg-card rounded-[28px] shadow-soft p-5">
                   <div className="flex items-start gap-4">
                     <div className="flex flex-col items-center gap-1 pt-1">
@@ -513,7 +519,6 @@ export default function ShipperLiveView() {
                   </div>
                 </div>
 
-                {/* Stats grid */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-card rounded-[28px] shadow-soft p-5">
                     <p className="text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground font-semibold">Price</p>
@@ -541,14 +546,12 @@ export default function ShipperLiveView() {
                   )}
                 </div>
 
-                {/* Status milestones */}
                 {['accepted', 'in_transit'].includes(selectedLoad.status) && (
                   <div className="bg-card rounded-[28px] shadow-soft p-5">
                     <StatusMilestones currentStatus={selectedLoad.status} />
                   </div>
                 )}
 
-                {/* Bids */}
                 {selectedLoad.status === 'posted' && (
                   <div className="bg-card rounded-[28px] shadow-soft p-5">
                     <p className="text-[15px] font-bold tracking-tight mb-3">Carrier Bids</p>
@@ -561,7 +564,6 @@ export default function ShipperLiveView() {
                   </div>
                 )}
 
-                {/* Live tracking */}
                 {selectedLoad.status === 'in_transit' && selectedLoad.driver_id && (
                   <div className="bg-card rounded-[28px] shadow-soft p-5 space-y-3">
                     <button
@@ -584,7 +586,6 @@ export default function ShipperLiveView() {
                   </div>
                 )}
 
-                {/* Chat */}
                 {showChat && (
                   <div className="bg-card rounded-[28px] shadow-soft p-5">
                     <LoadChat loadId={selectedLoad.id} />
@@ -592,7 +593,6 @@ export default function ShipperLiveView() {
                 )}
               </div>
 
-              {/* Sticky actions */}
               <div className="px-5 py-4 backdrop-blur-xl bg-background/85 border-t border-border/40 safe-area-bottom">
                 <div className="flex gap-2">
                   <Button
@@ -635,5 +635,73 @@ export default function ShipperLiveView() {
         </SheetContent>
       </Sheet>
     </div>
+  );
+}
+
+// ---------------- Draggable bottom sheet ----------------
+
+interface DraggableSheetProps {
+  height: ReturnType<typeof useMotionValue<number>>;
+  snaps: { collapsed: number; half: number; full: number };
+  snapState: 'collapsed' | 'half' | 'full';
+  onSnap: (s: 'collapsed' | 'half' | 'full') => void;
+  cycleSheet: () => void;
+  children: React.ReactNode;
+}
+
+function DraggableSheet({ height, snaps, snapState, onSnap, cycleSheet, children }: DraggableSheetProps) {
+  const dragStartRef = useRef(0);
+
+  const onDragEnd = (_e: any, info: { offset: { y: number }; velocity: { y: number } }) => {
+    const current = height.get();
+    const v = info.velocity.y;
+    let target: 'collapsed' | 'half' | 'full' = snapState;
+
+    if (v > 600) {
+      target = snapState === 'full' ? 'half' : 'collapsed';
+    } else if (v < -600) {
+      target = snapState === 'collapsed' ? 'half' : 'full';
+    } else {
+      const distances = {
+        collapsed: Math.abs(current - snaps.collapsed),
+        half: Math.abs(current - snaps.half),
+        full: Math.abs(current - snaps.full),
+      };
+      target = (Object.entries(distances).sort((a, b) => a[1] - b[1])[0][0]) as any;
+    }
+    onSnap(target);
+  };
+
+  return (
+    <motion.div
+      className="absolute bottom-0 left-0 right-0 z-[900] backdrop-blur-xl bg-card/85 rounded-t-[32px] shadow-pop overflow-hidden flex flex-col"
+      style={{ height }}
+      drag="y"
+      dragConstraints={{ top: 0, bottom: 0 }}
+      dragElastic={0}
+      onDragStart={() => { dragStartRef.current = height.get(); }}
+      onDrag={(_, info) => {
+        const next = Math.max(snaps.collapsed, Math.min(snaps.full + 60, dragStartRef.current - info.offset.y));
+        height.set(next);
+      }}
+      onDragEnd={onDragEnd}
+    >
+      <button
+        type="button"
+        onClick={cycleSheet}
+        className="w-full pt-2.5 pb-2 flex flex-col items-center cursor-grab active:cursor-grabbing"
+        aria-label="Toggle sheet"
+      >
+        <div className="w-10 h-1.5 rounded-full bg-muted-foreground/30" />
+        <div className="flex items-center gap-1 mt-1.5">
+          {snapState === 'full'
+            ? <ChevronDown className="h-3 w-3 text-muted-foreground" />
+            : <ChevronUp className="h-3 w-3 text-muted-foreground" />}
+        </div>
+      </button>
+      <div className="flex-1 overflow-y-auto overscroll-contain">
+        {children}
+      </div>
+    </motion.div>
   );
 }

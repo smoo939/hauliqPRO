@@ -1,17 +1,13 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { useNavigate } from 'react-router-dom';
 import { MapContainer, Marker, Polyline, useMap } from 'react-leaflet';
 import DynamicTileLayer from '@/components/map/DynamicTileLayer';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Switch } from '@/components/ui/switch';
 import {
-  Search, Sparkles, Bell, Box, Radar, SlidersHorizontal,
-  Flame, Truck, Package, ChevronRight,
+  Search, Sparkles, Box, Radar, Filter, Truck, Package, ChevronUp, ChevronDown,
 } from 'lucide-react';
-import { SubscriptionBadge } from '@/components/driver/SubscriptionPaywall';
-import { motion } from 'framer-motion';
+import { motion, useMotionValue, animate } from 'framer-motion';
 import LoadDetailModal from '@/components/driver/LoadDetailModal';
 import DriverFilters, { Filters, DEFAULT_FILTERS } from '@/components/driver/DriverFilters';
 import AppSidebar from '@/components/AppSidebar';
@@ -99,24 +95,23 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function FitBounds({ points }: { points: [number, number][] }) {
+function Recenter({ lat, lng }: { lat: number; lng: number }) {
   const map = useMap();
   useEffect(() => {
-    if (points.length === 0) return;
-    if (points.length === 1) {
-      map.setView(points[0], 11, { animate: true });
-    } else {
-      map.fitBounds(L.latLngBounds(points), { padding: [25, 25], maxZoom: 11 });
-    }
-  }, [points, map]);
+    map.setView([lat, lng], map.getZoom() < 8 ? 10 : map.getZoom(), { animate: true });
+  }, [lat, lng, map]);
   return null;
 }
 
 const GEOFENCE_KM = 100;
 
+// Sheet snap points (px from bottom of viewport)
+const SNAP_COLLAPSED = 132;
+const SNAP_HALF = 0.5;
+const SNAP_FULL = 0.78;
+
 export default function DriverHomeView() {
-  const { user, profile } = useAuth();
-  const navigate = useNavigate();
+  const { user } = useAuth();
   const { online, loads: localLoads } = useLocalFirstSnapshot();
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [selectedLoad, setSelectedLoad] = useState<any | null>(null);
@@ -125,6 +120,40 @@ export default function DriverHomeView() {
   const [driverPos, setDriverPos] = useState<{ lat: number; lng: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [geofenceEnabled, setGeofenceEnabled] = useState(false);
+  const [vh, setVh] = useState(typeof window !== 'undefined' ? window.innerHeight : 800);
+
+  useEffect(() => {
+    const onResize = () => setVh(window.innerHeight);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  // Sheet height (px). Three snap points.
+  const snaps = useMemo(() => ({
+    collapsed: SNAP_COLLAPSED,
+    half: Math.round(vh * SNAP_HALF),
+    full: Math.round(vh * SNAP_FULL),
+  }), [vh]);
+
+  const sheetHeight = useMotionValue(snaps.half);
+  const [snapState, setSnapState] = useState<'collapsed' | 'half' | 'full'>('half');
+
+  useEffect(() => {
+    // Re-snap on resize
+    const target = snaps[snapState];
+    animate(sheetHeight, target, { type: 'spring', damping: 30, stiffness: 280 });
+  }, [snaps, snapState, sheetHeight]);
+
+  const snapTo = (state: 'collapsed' | 'half' | 'full') => {
+    setSnapState(state);
+    animate(sheetHeight, snaps[state], { type: 'spring', damping: 30, stiffness: 280 });
+  };
+
+  const cycleSheet = () => {
+    if (snapState === 'collapsed') snapTo('half');
+    else if (snapState === 'half') snapTo('full');
+    else snapTo('collapsed');
+  };
 
   // Driver GPS
   useEffect(() => {
@@ -138,7 +167,6 @@ export default function DriverHomeView() {
   }, []);
 
   const loads = useMemo(() => localLoads.filter((load) => load.status === 'posted').slice(0, 60), [localLoads]);
-  const isLoading = false;
 
   // Geocode pickup locations
   useEffect(() => {
@@ -208,318 +236,185 @@ export default function DriverHomeView() {
     });
   }, [scoredLoads, driverPos, geofenceEnabled]);
 
-  const recommendedLoads = useMemo(() => {
-    return [...geofencedLoads]
-      .sort((a, b) => b.matchScore - a.matchScore)
-      .slice(0, 3)
-      .filter((l) => l.matchScore >= 30);
+  const sortedLoads = useMemo(() => {
+    return [...geofencedLoads].sort((a, b) => b.matchScore - a.matchScore);
   }, [geofencedLoads]);
 
-  const otherLoads = useMemo(() => {
-    const recIds = new Set(recommendedLoads.map((l: any) => l.id));
-    return geofencedLoads.filter((l: any) => !recIds.has(l.id));
-  }, [geofencedLoads, recommendedLoads]);
-
-  const totalAvailable = geofencedLoads.length;
-  const avgPrice = useMemo(() => {
-    if (!geofencedLoads.length) return 0;
-    return geofencedLoads.reduce((s: number, l: any) => s + Number(l.price || 0), 0) / geofencedLoads.length;
-  }, [geofencedLoads]);
+  const featuredLoad = sortedLoads[0];
 
   const handleSelectLoad = (load: any, score?: number) => {
     setSelectedLoad(load);
     setSelectedMatchScore(score);
   };
 
-  const firstName = (profile?.full_name || user?.email || 'There').split(' ')[0];
-  const initials = (profile?.full_name || user?.email || 'U')
-    .split(' ').map((s: string) => s[0]).slice(0, 2).join('').toUpperCase();
-
-  // Map points
-  const mapPoints: [number, number][] = useMemo(() => {
-    const pts: [number, number][] = [];
-    if (driverPos) pts.push([driverPos.lat, driverPos.lng]);
-    geoLoads.slice(0, 12).forEach((g) => pts.push([g.lat, g.lng]));
-    return pts;
-  }, [driverPos, geoLoads]);
-
-  // Active route to top recommended
+  // Active route to top recommended (keeps the glowing amber polyline)
   const activeRoute: [number, number][] | null = useMemo(() => {
-    if (!driverPos) return null;
-    const top = recommendedLoads[0];
-    if (!top) return null;
-    const geo = geoLoads.find((g) => g.id === top.id);
+    if (!driverPos || !featuredLoad) return null;
+    const geo = geoLoads.find((g) => g.id === featuredLoad.id);
     if (!geo) return null;
     return [[driverPos.lat, driverPos.lng], [geo.lat, geo.lng]];
-  }, [driverPos, recommendedLoads, geoLoads]);
+  }, [driverPos, featuredLoad, geoLoads]);
+
+  const mapCenter = driverPos || { lat: -19.0154, lng: 29.1549 };
 
   return (
-    <div className="min-h-screen bg-background pb-28">
-      {/* Frosted-glass scrolling header */}
-      <header className="sticky top-0 z-40 backdrop-blur-xl bg-background/70 px-5 pt-5 pb-4 safe-top">
-        <div className="flex items-center gap-3">
-          <AppSidebar role="driver" />
-          <div className="h-11 w-11 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold tracking-tight shadow-soft shrink-0">
-            {initials}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground font-semibold">Carrier</p>
-            <p className="text-[15px] font-bold tracking-tight text-foreground truncate">
-              Hi, {firstName}
-            </p>
-          </div>
-          <div className="flex items-center gap-1.5 rounded-full bg-card shadow-soft px-3 h-11">
-            <span className={`text-[10px] font-bold tracking-tight ${online ? 'text-foreground' : 'text-muted-foreground'}`}>
-              {online ? 'ONLINE' : 'OFFLINE'}
-            </span>
-            <Switch checked={online} disabled className="h-4 w-7 data-[state=checked]:bg-primary" />
-          </div>
-          <button
-            className="h-11 w-11 rounded-full bg-card shadow-soft flex items-center justify-center relative shrink-0"
-            aria-label="Notifications"
-          >
-            <Bell className="h-[18px] w-[18px] text-foreground" strokeWidth={1.8} />
-            {totalAvailable > 0 && (
-              <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-primary ring-2 ring-card" />
-            )}
-          </button>
-        </div>
-      </header>
+    <div className="fixed inset-0 z-0">
+      {/* Full-screen zoomable map */}
+      <MapContainer
+        center={[mapCenter.lat, mapCenter.lng]}
+        zoom={driverPos ? 10 : 6}
+        style={{ height: '100%', width: '100%' }}
+        zoomControl={false}
+        attributionControl={false}
+      >
+        <DynamicTileLayer />
+        {driverPos && <Recenter lat={driverPos.lat} lng={driverPos.lng} />}
+        {driverPos && <Marker position={[driverPos.lat, driverPos.lng]} icon={driverIcon} />}
+        {geoLoads.map((load) => (
+          <Marker
+            key={load.id}
+            position={[load.lat, load.lng]}
+            icon={load.urgent ? urgentPinIcon : loadPinIcon}
+            eventHandlers={{ click: () => handleSelectLoad(load) }}
+          />
+        ))}
+        {activeRoute && (
+          <>
+            <Polyline positions={activeRoute} pathOptions={{ color: '#FBBF24', weight: 12, opacity: 0.18, lineCap: 'round' }} />
+            <Polyline positions={activeRoute} pathOptions={{ color: '#FBBF24', weight: 6, opacity: 0.35, lineCap: 'round' }} />
+            <Polyline positions={activeRoute} pathOptions={{ color: '#FBBF24', weight: 3.2, opacity: 1, lineCap: 'round', dashArray: '6 8' }} />
+          </>
+        )}
+      </MapContainer>
 
-      <main className="px-5 mt-2 space-y-5">
-        {/* Hero island — Available Loads */}
-        <section className="bg-card rounded-[32px] shadow-soft p-6">
-          <div className="flex items-end justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground font-semibold">
-                Available loads
-              </p>
-              <p className="mt-1 text-[44px] leading-none font-bold tracking-tight text-foreground">
-                {totalAvailable}
-              </p>
-              <p className="mt-2 text-[12px] text-muted-foreground">
-                Avg payout{' '}
-                <span className="font-semibold text-foreground">
-                  ${avgPrice.toFixed(0)}
-                </span>
-                {driverPos && (
-                  <>
-                    {' '}·{' '}
-                    <span className="font-semibold text-foreground">
-                      {geoLoads.length}
-                    </span>{' '}
-                    on map
-                  </>
-                )}
-              </p>
-            </div>
-            <div className="shrink-0">
-              <SubscriptionBadge />
-            </div>
+      {/* Top bar: sidebar + search + filter */}
+      <div className="absolute top-0 left-0 right-0 z-[1000] safe-top">
+        <div className="mx-3 mt-3 flex items-center gap-2">
+          <div className="h-11 w-11 rounded-full bg-card shadow-soft flex items-center justify-center shrink-0 [&_button]:!bg-transparent [&_button]:!shadow-none [&_button]:!h-11 [&_button]:!w-11">
+            <AppSidebar role="driver" />
           </div>
-        </section>
-
-        {/* Search + filter pill row */}
-        <section className="flex items-center gap-2.5">
-          <div className="flex-1 flex items-center gap-2.5 bg-card rounded-full shadow-soft px-4 h-12">
+          <div className="flex-1 flex items-center gap-2 bg-card rounded-full shadow-soft px-4 h-11">
             <Search className="h-[16px] w-[16px] text-muted-foreground shrink-0" strokeWidth={1.8} />
             <input
               placeholder="Search loads or locations…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1 bg-transparent border-0 outline-none text-[13px] font-medium placeholder:text-muted-foreground/60"
+              className="flex-1 bg-transparent border-0 outline-none text-[13px] font-medium placeholder:text-muted-foreground/60 min-w-0"
             />
+            {online && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300 shrink-0">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary" /> LIVE
+              </span>
+            )}
           </div>
           <button
-            onClick={() => setGeofenceEnabled(!geofenceEnabled)}
-            aria-label="Nearby toggle"
-            className={`h-12 w-12 rounded-full flex items-center justify-center shadow-soft transition-colors ${
-              geofenceEnabled
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-card text-foreground'
+            onClick={() => setGeofenceEnabled(v => !v)}
+            aria-label="Nearby"
+            className={`h-11 w-11 rounded-full shadow-soft flex items-center justify-center shrink-0 transition-colors ${
+              geofenceEnabled ? 'bg-primary text-primary-foreground' : 'bg-card text-foreground'
             }`}
           >
             <Radar className="h-[18px] w-[18px]" strokeWidth={1.8} />
           </button>
-          <div className="h-12 w-12 rounded-full bg-foreground text-background shadow-soft flex items-center justify-center [&>*]:!h-12 [&>*]:!w-12 [&>*]:!min-h-0 [&>*]:!min-w-0 [&>*]:!rounded-full [&>*]:!bg-transparent [&>*]:!text-background [&>*]:!shadow-none [&>*]:!border-0">
+          <div className="h-11 w-11 rounded-full bg-card shadow-soft flex items-center justify-center shrink-0 [&>*]:!h-11 [&>*]:!w-11 [&>*]:!min-h-0 [&>*]:!min-w-0 [&>*]:!rounded-full [&>*]:!bg-transparent [&>*]:!text-foreground [&>*]:!shadow-none [&>*]:!border-0">
             <DriverFilters filters={filters} onChange={setFilters} />
           </div>
-        </section>
+        </div>
+      </div>
 
-        {/* Inset map card — John Davidson style */}
-        <section className="bg-card rounded-[32px] shadow-soft overflow-hidden">
-          <div className="relative">
-            <div className="h-56">
-              <MapContainer
-                center={driverPos ? [driverPos.lat, driverPos.lng] : [-19.0154, 29.1549]}
-                zoom={driverPos ? 10 : 6}
-                style={{ height: '100%', width: '100%' }}
-                zoomControl={false}
-                attributionControl={false}
-                scrollWheelZoom={false}
-                doubleClickZoom={false}
-                dragging={false}
-                touchZoom={false}
-              >
-                <DynamicTileLayer />
-                <FitBounds points={mapPoints} />
-                {driverPos && <Marker position={[driverPos.lat, driverPos.lng]} icon={driverIcon} />}
-                {geoLoads.slice(0, 12).map((load) => (
-                  <Marker
-                    key={load.id}
-                    position={[load.lat, load.lng]}
-                    icon={load.urgent ? urgentPinIcon : loadPinIcon}
-                    eventHandlers={{ click: () => handleSelectLoad(load) }}
-                  />
-                ))}
-                {activeRoute && (
-                  <>
-                    <Polyline positions={activeRoute} pathOptions={{ color: '#FBBF24', weight: 12, opacity: 0.18, lineCap: 'round' }} />
-                    <Polyline positions={activeRoute} pathOptions={{ color: '#FBBF24', weight: 6, opacity: 0.35, lineCap: 'round' }} />
-                    <Polyline positions={activeRoute} pathOptions={{ color: '#FBBF24', weight: 3.2, opacity: 1, lineCap: 'round', dashArray: '6 8' }} />
-                  </>
-                )}
-              </MapContainer>
-            </div>
-            <div className="absolute top-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-card/90 backdrop-blur px-3 py-1.5 shadow-soft">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-              </span>
-              <span className="text-[10.5px] font-semibold tracking-tight text-foreground">
-                {geoLoads.length} pinned
-              </span>
-            </div>
-            {recommendedLoads[0] && (
-              <div className="absolute bottom-3 left-3 right-3 rounded-2xl bg-card/95 backdrop-blur shadow-soft px-3 py-2.5 flex items-center gap-3">
-                <div className="h-9 w-9 rounded-xl bg-primary flex items-center justify-center shrink-0">
-                  <Truck className="h-4 w-4 text-primary-foreground" strokeWidth={2} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground font-semibold">
-                    Best match nearby
-                  </p>
-                  <p className="text-[13px] font-bold tracking-tight truncate text-foreground">
-                    {recommendedLoads[0].pickup_location} → {recommendedLoads[0].delivery_location}
-                  </p>
-                </div>
-                <button
-                  onClick={() => handleSelectLoad(recommendedLoads[0], recommendedLoads[0].matchScore)}
-                  className="shrink-0 h-9 w-9 rounded-full bg-foreground text-background flex items-center justify-center shadow-soft"
-                >
-                  <ChevronRight className="h-4 w-4" strokeWidth={2.4} />
-                </button>
+      {/* Bottom sheet (3 snap states) */}
+      <DraggableSheet
+        height={sheetHeight}
+        snaps={snaps}
+        onSnap={snapTo}
+        snapState={snapState}
+        cycleSheet={cycleSheet}
+      >
+        <div className="px-4 pb-28">
+          {sortedLoads.length === 0 ? (
+            <div className="flex flex-col items-center py-10 text-center">
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-secondary">
+                <Package className="h-6 w-6 text-muted-foreground" strokeWidth={1.6} />
               </div>
-            )}
-          </div>
-        </section>
-
-        {/* AI Recommended */}
-        {recommendedLoads.length > 0 && (
-          <section>
-            <div className="flex items-baseline justify-between mb-3 px-1">
-              <div className="flex items-center gap-2">
-                <Flame className="h-4 w-4 text-primary" strokeWidth={1.8} />
-                <h2 className="text-[18px] font-bold tracking-tight text-foreground">AI Recommended</h2>
-                <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/15 text-amber-700 dark:text-amber-300 px-2 py-0.5 text-[10px] font-semibold">
-                  <Sparkles className="h-2.5 w-2.5" /> Smart
-                </span>
-              </div>
-            </div>
-            <div className="space-y-3">
-              {recommendedLoads.map((load: any) => (
-                <ShipmentCard
-                  key={`rec-${load.id}`}
-                  id={load.tracking_code || load.id.slice(0, 8).toUpperCase()}
-                  title={load.title || load.equipment_type || 'Load'}
-                  status={load.status}
-                  pickupLocation={load.pickup_location}
-                  deliveryLocation={load.delivery_location}
-                  pickupDate={load.pickup_date}
-                  deliveryDate={load.delivery_date}
-                  price={load.price}
-                  thumbnailIcon={<Box className="h-5 w-5 text-amber-700 dark:text-amber-300" strokeWidth={1.8} />}
-                  onClick={() => handleSelectLoad(load, load.matchScore)}
-                  rightSlot={
-                    <div className="text-right shrink-0">
-                      <p className="text-[15px] font-bold tracking-tight text-foreground">
-                        ${Number(load.price || 0).toLocaleString()}
-                      </p>
-                      <p className="text-[10.5px] text-muted-foreground font-semibold mt-0.5">
-                        {load.distKm != null ? `${load.distKm.toFixed(0)} km` : `${Math.round(load.matchScore)}% match`}
-                      </p>
-                    </div>
-                  }
-                />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* All loads */}
-        <section>
-          <div className="flex items-baseline justify-between mb-3 px-1">
-            <h2 className="text-[18px] font-bold tracking-tight text-foreground">
-              {recommendedLoads.length > 0 ? 'All Loads' : 'Available Loads'}
-            </h2>
-            <span className="text-[12px] text-muted-foreground">
-              {otherLoads.length}{geofenceEnabled ? ` · ≤${GEOFENCE_KM}km` : ''}
-            </span>
-          </div>
-
-          {isLoading ? (
-            <div className="bg-card rounded-[28px] shadow-soft p-8 flex justify-center">
-              <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-            </div>
-          ) : geofencedLoads.length === 0 ? (
-            <div className="bg-card rounded-[32px] shadow-soft p-10 text-center">
-              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary">
-                <Package className="h-7 w-7 text-muted-foreground" strokeWidth={1.6} />
-              </div>
-              <p className="text-[15px] font-bold tracking-tight">No loads found</p>
+              <p className="text-[14px] font-bold tracking-tight">No loads available</p>
               <p className="text-[12px] text-muted-foreground mt-1">
-                {geofenceEnabled
-                  ? `No loads within ${GEOFENCE_KM}km — try the nearby toggle`
-                  : 'Try adjusting filters or check back soon'}
+                {geofenceEnabled ? `Nothing within ${GEOFENCE_KM}km` : 'Try adjusting filters'}
               </p>
             </div>
-          ) : otherLoads.length === 0 ? null : (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-3"
-            >
-              {otherLoads.map((load: any) => (
-                <ShipmentCard
-                  key={load.id}
-                  id={load.tracking_code || load.id.slice(0, 8).toUpperCase()}
-                  title={load.title || load.equipment_type || 'Load'}
-                  status={load.status}
-                  pickupLocation={load.pickup_location}
-                  deliveryLocation={load.delivery_location}
-                  pickupDate={load.pickup_date}
-                  deliveryDate={load.delivery_date}
-                  price={load.price}
-                  thumbnailIcon={<Box className="h-5 w-5 text-muted-foreground" strokeWidth={1.6} />}
-                  onClick={() => handleSelectLoad(load, load.matchScore)}
-                  rightSlot={
-                    <div className="text-right shrink-0">
-                      <p className="text-[15px] font-bold tracking-tight text-foreground">
-                        ${Number(load.price || 0).toLocaleString()}
-                      </p>
-                      {load.distKm != null && (
-                        <p className="text-[10.5px] text-muted-foreground font-semibold mt-0.5">
-                          {load.distKm.toFixed(0)} km
+          ) : (
+            <div className="space-y-3">
+              {/* Featured first */}
+              {featuredLoad && (
+                <div>
+                  {snapState === 'collapsed' ? null : (
+                    <p className="text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground font-semibold mb-2 flex items-center gap-1.5">
+                      <Sparkles className="h-3 w-3 text-primary" /> Best Match
+                    </p>
+                  )}
+                  <ShipmentCard
+                    id={featuredLoad.tracking_code || featuredLoad.id.slice(0, 8).toUpperCase()}
+                    title={featuredLoad.title || featuredLoad.equipment_type || 'Load'}
+                    status={featuredLoad.status}
+                    pickupLocation={featuredLoad.pickup_location}
+                    deliveryLocation={featuredLoad.delivery_location}
+                    pickupDate={featuredLoad.pickup_date}
+                    deliveryDate={featuredLoad.delivery_date}
+                    price={featuredLoad.price}
+                    thumbnailIcon={<Box className="h-5 w-5 text-amber-700 dark:text-amber-300" strokeWidth={1.8} />}
+                    onClick={() => handleSelectLoad(featuredLoad, featuredLoad.matchScore)}
+                    rightSlot={
+                      <div className="text-right shrink-0">
+                        <p className="text-[15px] font-bold tracking-tight text-foreground">
+                          ${Number(featuredLoad.price || 0).toLocaleString()}
                         </p>
-                      )}
-                    </div>
-                  }
-                />
-              ))}
-            </motion.div>
+                        <p className="text-[10.5px] text-muted-foreground font-semibold mt-0.5">
+                          {featuredLoad.distKm != null ? `${featuredLoad.distKm.toFixed(0)} km` : `${Math.round(featuredLoad.matchScore)}%`}
+                        </p>
+                      </div>
+                    }
+                  />
+                </div>
+              )}
+
+              {snapState !== 'collapsed' && sortedLoads.length > 1 && (
+                <div className="space-y-3">
+                  <p className="text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground font-semibold pt-1 flex items-center justify-between">
+                    <span>All loads</span>
+                    <span className="text-foreground">{sortedLoads.length - 1}</span>
+                  </p>
+                  {sortedLoads.slice(1).map((load: any) => (
+                    <ShipmentCard
+                      key={load.id}
+                      id={load.tracking_code || load.id.slice(0, 8).toUpperCase()}
+                      title={load.title || load.equipment_type || 'Load'}
+                      status={load.status}
+                      pickupLocation={load.pickup_location}
+                      deliveryLocation={load.delivery_location}
+                      pickupDate={load.pickup_date}
+                      deliveryDate={load.delivery_date}
+                      price={load.price}
+                      thumbnailIcon={<Box className="h-5 w-5 text-muted-foreground" strokeWidth={1.6} />}
+                      onClick={() => handleSelectLoad(load, load.matchScore)}
+                      rightSlot={
+                        <div className="text-right shrink-0">
+                          <p className="text-[15px] font-bold tracking-tight text-foreground">
+                            ${Number(load.price || 0).toLocaleString()}
+                          </p>
+                          {load.distKm != null && (
+                            <p className="text-[10.5px] text-muted-foreground font-semibold mt-0.5">
+                              {load.distKm.toFixed(0)} km
+                            </p>
+                          )}
+                        </div>
+                      }
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           )}
-        </section>
-      </main>
+        </div>
+      </DraggableSheet>
 
       <LoadDetailModal
         load={selectedLoad}
@@ -528,5 +423,77 @@ export default function DriverHomeView() {
         matchScore={selectedMatchScore}
       />
     </div>
+  );
+}
+
+// ---------------- Draggable bottom sheet ----------------
+
+interface DraggableSheetProps {
+  height: ReturnType<typeof useMotionValue<number>>;
+  snaps: { collapsed: number; half: number; full: number };
+  snapState: 'collapsed' | 'half' | 'full';
+  onSnap: (s: 'collapsed' | 'half' | 'full') => void;
+  cycleSheet: () => void;
+  children: React.ReactNode;
+}
+
+function DraggableSheet({ height, snaps, snapState, onSnap, cycleSheet, children }: DraggableSheetProps) {
+  const dragStartRef = useRef(0);
+
+  const onDragEnd = (_e: any, info: { offset: { y: number }; velocity: { y: number } }) => {
+    const current = height.get();
+    const v = info.velocity.y;
+    let target: 'collapsed' | 'half' | 'full' = snapState;
+
+    if (v > 600) {
+      // Swipe down hard
+      target = snapState === 'full' ? 'half' : 'collapsed';
+    } else if (v < -600) {
+      // Swipe up hard
+      target = snapState === 'collapsed' ? 'half' : 'full';
+    } else {
+      // Snap to nearest
+      const distances = {
+        collapsed: Math.abs(current - snaps.collapsed),
+        half: Math.abs(current - snaps.half),
+        full: Math.abs(current - snaps.full),
+      };
+      target = (Object.entries(distances).sort((a, b) => a[1] - b[1])[0][0]) as any;
+    }
+    onSnap(target);
+  };
+
+  return (
+    <motion.div
+      className="absolute bottom-0 left-0 right-0 z-[900] backdrop-blur-xl bg-card/85 rounded-t-[32px] shadow-pop overflow-hidden flex flex-col"
+      style={{ height }}
+      drag="y"
+      dragConstraints={{ top: 0, bottom: 0 }}
+      dragElastic={0}
+      onDragStart={() => { dragStartRef.current = height.get(); }}
+      onDrag={(_, info) => {
+        const next = Math.max(snaps.collapsed, Math.min(snaps.full + 60, dragStartRef.current - info.offset.y));
+        height.set(next);
+      }}
+      onDragEnd={onDragEnd}
+    >
+      {/* Handle */}
+      <button
+        type="button"
+        onClick={cycleSheet}
+        className="w-full pt-2.5 pb-2 flex flex-col items-center cursor-grab active:cursor-grabbing"
+        aria-label="Toggle sheet"
+      >
+        <div className="w-10 h-1.5 rounded-full bg-muted-foreground/30" />
+        <div className="flex items-center gap-1 mt-1.5">
+          {snapState === 'full'
+            ? <ChevronDown className="h-3 w-3 text-muted-foreground" />
+            : <ChevronUp className="h-3 w-3 text-muted-foreground" />}
+        </div>
+      </button>
+      <div className="flex-1 overflow-y-auto overscroll-contain">
+        {children}
+      </div>
+    </motion.div>
   );
 }
