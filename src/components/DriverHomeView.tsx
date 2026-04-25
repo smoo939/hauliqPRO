@@ -1,22 +1,25 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { MapContainer, Marker, Popup, useMap } from 'react-leaflet';
+import { useNavigate } from 'react-router-dom';
+import { MapContainer, Marker, Polyline, useMap } from 'react-leaflet';
 import DynamicTileLayer from '@/components/map/DynamicTileLayer';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Input } from '@/components/ui/input';
-import { Search, Sparkles, Flame, ChevronUp, ChevronDown, Radar } from 'lucide-react';
+import {
+  Search, Sparkles, Bell, Box, Radar, SlidersHorizontal,
+  Flame, Truck, Package, ChevronRight,
+} from 'lucide-react';
 import { SubscriptionBadge } from '@/components/driver/SubscriptionPaywall';
 import { motion } from 'framer-motion';
-import LoadCard from '@/components/driver/LoadCard';
 import LoadDetailModal from '@/components/driver/LoadDetailModal';
 import DriverFilters, { Filters, DEFAULT_FILTERS } from '@/components/driver/DriverFilters';
 import AppSidebar from '@/components/AppSidebar';
+import ShipmentCard from '@/components/shared/ShipmentCard';
 import { calculateMatchScore } from '@/lib/matchScore';
 import { useLocalFirstSnapshot } from '@/lib/localFirst';
 
+// Leaflet defaults
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
@@ -24,30 +27,28 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-// Soft amber load pin
 const loadPinIcon = new L.DivIcon({
-  html: `<div style="background:#FBBF24;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid #ffffff;box-shadow:0 6px 16px rgba(251,191,36,0.45),0 2px 6px rgba(0,0,0,0.12);font-size:12px;">📦</div>`,
+  html: `<div style="background:#FBBF24;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid #ffffff;box-shadow:0 6px 16px rgba(251,191,36,0.45),0 2px 6px rgba(0,0,0,0.12);"><span style="width:6px;height:6px;background:#2D3436;border-radius:50%"></span></div>`,
+  iconSize: [26, 26],
+  iconAnchor: [13, 13],
+  className: '',
+});
+
+const urgentPinIcon = new L.DivIcon({
+  html: `<div style="background:#2D3436;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid #FBBF24;box-shadow:0 6px 16px rgba(0,0,0,0.25);font-size:11px;">🚨</div>`,
   iconSize: [28, 28],
   iconAnchor: [14, 14],
   className: '',
 });
 
-const urgentPinIcon = new L.DivIcon({
-  html: `<div style="background:#2D3436;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid #FBBF24;box-shadow:0 6px 16px rgba(0,0,0,0.25);font-size:12px;">🚨</div>`,
-  iconSize: [30, 30],
-  iconAnchor: [15, 15],
-  className: '',
-});
-
-// Soft amber driver icon
 const driverIcon = new L.DivIcon({
-  html: `<div style="background:#FBBF24;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid #ffffff;box-shadow:0 6px 18px rgba(251,191,36,0.55),0 2px 8px rgba(0,0,0,0.18);">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2D3436" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+  html: `<div style="background:#FBBF24;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid #ffffff;box-shadow:0 6px 18px rgba(251,191,36,0.55),0 2px 8px rgba(0,0,0,0.18);">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2D3436" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
       <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/>
     </svg>
   </div>`,
-  iconSize: [36, 36],
-  iconAnchor: [18, 18],
+  iconSize: [34, 34],
+  iconAnchor: [17, 17],
   className: '',
 });
 
@@ -98,28 +99,30 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function RecenterMap({ lat, lng }: { lat: number; lng: number }) {
+function FitBounds({ points }: { points: [number, number][] }) {
   const map = useMap();
   useEffect(() => {
-    map.setView([lat, lng], map.getZoom());
-  }, [lat, lng, map]);
+    if (points.length === 0) return;
+    if (points.length === 1) {
+      map.setView(points[0], 11, { animate: true });
+    } else {
+      map.fitBounds(L.latLngBounds(points), { padding: [25, 25], maxZoom: 11 });
+    }
+  }, [points, map]);
   return null;
 }
 
-const SNAP_COLLAPSED = 0.12;
-const SNAP_HALF = 0.42;
-const SNAP_FULL = 0.86;
 const GEOFENCE_KM = 100;
 
 export default function DriverHomeView() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const navigate = useNavigate();
   const { online, loads: localLoads } = useLocalFirstSnapshot();
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [selectedLoad, setSelectedLoad] = useState<any | null>(null);
   const [selectedMatchScore, setSelectedMatchScore] = useState<number | undefined>();
   const [geoLoads, setGeoLoads] = useState<GeoLoad[]>([]);
   const [driverPos, setDriverPos] = useState<{ lat: number; lng: number } | null>(null);
-  const [sheetHeight, setSheetHeight] = useState(SNAP_HALF);
   const [searchQuery, setSearchQuery] = useState('');
   const [geofenceEnabled, setGeofenceEnabled] = useState(false);
 
@@ -196,208 +199,327 @@ export default function DriverHomeView() {
     });
   }, [filteredLoads, geoLoads, driverPos]);
 
-  // 100km geofence filter
+  // 100km geofence
   const geofencedLoads = useMemo(() => {
     if (!geofenceEnabled || !driverPos) return scoredLoads;
     return scoredLoads.filter((load: any) => {
-      if (load.distKm == null) return true; // Keep un-geocoded loads
+      if (load.distKm == null) return true;
       return load.distKm <= GEOFENCE_KM;
     });
   }, [scoredLoads, driverPos, geofenceEnabled]);
 
-  // AI Recommended: top 5 by match score
   const recommendedLoads = useMemo(() => {
     return [...geofencedLoads]
       .sort((a, b) => b.matchScore - a.matchScore)
-      .slice(0, 5)
+      .slice(0, 3)
       .filter((l) => l.matchScore >= 30);
   }, [geofencedLoads]);
 
-  // All other loads
   const otherLoads = useMemo(() => {
     const recIds = new Set(recommendedLoads.map((l: any) => l.id));
     return geofencedLoads.filter((l: any) => !recIds.has(l.id));
   }, [geofencedLoads, recommendedLoads]);
 
-  const toggleSheet = () => {
-    if (sheetHeight <= SNAP_COLLAPSED) setSheetHeight(SNAP_HALF);
-    else if (sheetHeight <= SNAP_HALF) setSheetHeight(SNAP_FULL);
-    else setSheetHeight(SNAP_HALF);
-  };
+  const totalAvailable = geofencedLoads.length;
+  const avgPrice = useMemo(() => {
+    if (!geofencedLoads.length) return 0;
+    return geofencedLoads.reduce((s: number, l: any) => s + Number(l.price || 0), 0) / geofencedLoads.length;
+  }, [geofencedLoads]);
 
   const handleSelectLoad = (load: any, score?: number) => {
     setSelectedLoad(load);
     setSelectedMatchScore(score);
   };
 
-  const mapCenter = driverPos || { lat: -19.0154, lng: 29.1549 };
+  const firstName = (profile?.full_name || user?.email || 'There').split(' ')[0];
+  const initials = (profile?.full_name || user?.email || 'U')
+    .split(' ').map((s: string) => s[0]).slice(0, 2).join('').toUpperCase();
+
+  // Map points
+  const mapPoints: [number, number][] = useMemo(() => {
+    const pts: [number, number][] = [];
+    if (driverPos) pts.push([driverPos.lat, driverPos.lng]);
+    geoLoads.slice(0, 12).forEach((g) => pts.push([g.lat, g.lng]));
+    return pts;
+  }, [driverPos, geoLoads]);
+
+  // Active route to top recommended
+  const activeRoute: [number, number][] | null = useMemo(() => {
+    if (!driverPos) return null;
+    const top = recommendedLoads[0];
+    if (!top) return null;
+    const geo = geoLoads.find((g) => g.id === top.id);
+    if (!geo) return null;
+    return [[driverPos.lat, driverPos.lng], [geo.lat, geo.lng]];
+  }, [driverPos, recommendedLoads, geoLoads]);
 
   return (
-    <div className="fixed inset-0 z-0">
-      <MapContainer
-        center={[mapCenter.lat, mapCenter.lng]}
-        zoom={driverPos ? 10 : 6}
-        style={{ height: '100%', width: '100%' }}
-        zoomControl={false}
-      >
-        <DynamicTileLayer />
-        {driverPos && <RecenterMap lat={driverPos.lat} lng={driverPos.lng} />}
-        {driverPos && (
-          <Marker position={[driverPos.lat, driverPos.lng]} icon={driverIcon}>
-            <Popup>
-              <div className="text-xs font-bold text-foreground">📍 Your position</div>
-            </Popup>
-          </Marker>
-        )}
-        {geoLoads.map((load) => (
-          <Marker
-            key={load.id}
-            position={[load.lat, load.lng]}
-            icon={load.urgent ? urgentPinIcon : loadPinIcon}
-            eventHandlers={{ click: () => handleSelectLoad(load) }}
-          >
-            <Popup>
-              <div className="min-w-[170px] space-y-1">
-                <p className="font-black text-sm">{load.tracking_code || load.title}</p>
-                <p className="text-xs text-muted-foreground">{load.pickup_location} → {load.delivery_location}</p>
-                <p className="text-base font-black" style={{ color: '#FFBF00' }}>${Number(load.price || 0).toLocaleString()}</p>
-                {load.equipment_type && <p className="text-xs text-muted-foreground">🚛 {load.equipment_type}</p>}
-              </div>
-            </Popup>
-          </Marker>
-        ))}
-      </MapContainer>
-
-      {/* Top bar */}
-      <div className="absolute top-0 left-0 right-0 z-[1000] safe-top">
-        <div className="mx-3 mt-3 flex items-center gap-2">
+    <div className="min-h-screen bg-background pb-28">
+      {/* Frosted-glass scrolling header */}
+      <header className="sticky top-0 z-40 backdrop-blur-xl bg-background/70 px-5 pt-5 pb-4 safe-top">
+        <div className="flex items-center gap-3">
           <AppSidebar role="driver" />
-
-          <div className="flex-1 flex items-center gap-2 glass shadow-soft rounded-full px-3.5 py-2">
-            <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" strokeWidth={1.8} />
-            <Input
-              placeholder="Search loads or locations…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="border-0 bg-transparent h-6 text-[12px] p-0 rounded-none focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/60"
-            />
+          <div className="h-11 w-11 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold tracking-tight shadow-soft shrink-0">
+            {initials}
           </div>
-
-          {/* Online indicator */}
-          <div className="flex items-center gap-1.5 glass shadow-soft rounded-full px-2.5 py-2 shrink-0">
-            <span className={`text-[9.5px] font-bold tracking-tight ${online ? 'text-foreground' : 'text-muted-foreground'}`}>
-              {online ? 'LIVE' : 'OFF'}
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground font-semibold">Carrier</p>
+            <p className="text-[15px] font-bold tracking-tight text-foreground truncate">
+              Hi, {firstName}
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 rounded-full bg-card shadow-soft px-3 h-11">
+            <span className={`text-[10px] font-bold tracking-tight ${online ? 'text-foreground' : 'text-muted-foreground'}`}>
+              {online ? 'ONLINE' : 'OFFLINE'}
             </span>
             <Switch checked={online} disabled className="h-4 w-7 data-[state=checked]:bg-primary" />
           </div>
-
-          <DriverFilters filters={filters} onChange={setFilters} />
-        </div>
-      </div>
-
-      {/* Geofence toggle pill */}
-      <div className="absolute top-16 left-3 z-[1000]">
-        <button
-          onClick={() => setGeofenceEnabled(!geofenceEnabled)}
-          className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold transition-all shadow-soft ${
-            geofenceEnabled
-              ? 'bg-primary text-primary-foreground glow-amber'
-              : 'glass text-muted-foreground'
-          }`}
-        >
-          <Radar className="h-3 w-3" strokeWidth={1.8} />
-          {geofenceEnabled ? `≤${GEOFENCE_KM}km` : 'Nearby'}
-        </button>
-      </div>
-
-      {/* Subscription badge */}
-      <div className="absolute top-16 right-3 z-[1000]">
-        <SubscriptionBadge />
-      </div>
-
-      {/* Bottom sheet */}
-      <motion.div
-        className="absolute bottom-0 left-0 right-0 z-[1000] glass-strong rounded-t-3xl shadow-pop"
-        style={{ height: `${sheetHeight * 100}vh` }}
-        animate={{ height: `${sheetHeight * 100}vh` }}
-        transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-      >
-        {/* Drag handle */}
-        <div className="flex flex-col items-center pt-3 pb-1 cursor-pointer" onClick={toggleSheet}>
-          <div className="w-9 h-1 rounded-full bg-muted-foreground/25" />
-          <div className="flex items-center gap-1.5 mt-2">
-            {sheetHeight >= SNAP_FULL ? (
-              <ChevronDown className="h-3 w-3 text-muted-foreground" />
-            ) : (
-              <ChevronUp className="h-3 w-3 text-muted-foreground" />
+          <button
+            className="h-11 w-11 rounded-full bg-card shadow-soft flex items-center justify-center relative shrink-0"
+            aria-label="Notifications"
+          >
+            <Bell className="h-[18px] w-[18px] text-foreground" strokeWidth={1.8} />
+            {totalAvailable > 0 && (
+              <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-primary ring-2 ring-card" />
             )}
-            <span className="text-[11px] text-muted-foreground font-semibold">
-              {geofencedLoads.length} load{geofencedLoads.length !== 1 ? 's' : ''}
-              {geofenceEnabled ? ` · ≤${GEOFENCE_KM}km` : ' available'}
+          </button>
+        </div>
+      </header>
+
+      <main className="px-5 mt-2 space-y-5">
+        {/* Hero island — Available Loads */}
+        <section className="bg-card rounded-[32px] shadow-soft p-6">
+          <div className="flex items-end justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground font-semibold">
+                Available loads
+              </p>
+              <p className="mt-1 text-[44px] leading-none font-bold tracking-tight text-foreground">
+                {totalAvailable}
+              </p>
+              <p className="mt-2 text-[12px] text-muted-foreground">
+                Avg payout{' '}
+                <span className="font-semibold text-foreground">
+                  ${avgPrice.toFixed(0)}
+                </span>
+                {driverPos && (
+                  <>
+                    {' '}·{' '}
+                    <span className="font-semibold text-foreground">
+                      {geoLoads.length}
+                    </span>{' '}
+                    on map
+                  </>
+                )}
+              </p>
+            </div>
+            <div className="shrink-0">
+              <SubscriptionBadge />
+            </div>
+          </div>
+        </section>
+
+        {/* Search + filter pill row */}
+        <section className="flex items-center gap-2.5">
+          <div className="flex-1 flex items-center gap-2.5 bg-card rounded-full shadow-soft px-4 h-12">
+            <Search className="h-[16px] w-[16px] text-muted-foreground shrink-0" strokeWidth={1.8} />
+            <input
+              placeholder="Search loads or locations…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="flex-1 bg-transparent border-0 outline-none text-[13px] font-medium placeholder:text-muted-foreground/60"
+            />
+          </div>
+          <button
+            onClick={() => setGeofenceEnabled(!geofenceEnabled)}
+            aria-label="Nearby toggle"
+            className={`h-12 w-12 rounded-full flex items-center justify-center shadow-soft transition-colors ${
+              geofenceEnabled
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-card text-foreground'
+            }`}
+          >
+            <Radar className="h-[18px] w-[18px]" strokeWidth={1.8} />
+          </button>
+          <div className="h-12 w-12 rounded-full bg-foreground text-background shadow-soft flex items-center justify-center [&>*]:!h-12 [&>*]:!w-12 [&>*]:!min-h-0 [&>*]:!min-w-0 [&>*]:!rounded-full [&>*]:!bg-transparent [&>*]:!text-background [&>*]:!shadow-none [&>*]:!border-0">
+            <DriverFilters filters={filters} onChange={setFilters} />
+          </div>
+        </section>
+
+        {/* Inset map card — John Davidson style */}
+        <section className="bg-card rounded-[32px] shadow-soft overflow-hidden">
+          <div className="relative">
+            <div className="h-56">
+              <MapContainer
+                center={driverPos ? [driverPos.lat, driverPos.lng] : [-19.0154, 29.1549]}
+                zoom={driverPos ? 10 : 6}
+                style={{ height: '100%', width: '100%' }}
+                zoomControl={false}
+                attributionControl={false}
+                scrollWheelZoom={false}
+                doubleClickZoom={false}
+                dragging={false}
+                touchZoom={false}
+              >
+                <DynamicTileLayer />
+                <FitBounds points={mapPoints} />
+                {driverPos && <Marker position={[driverPos.lat, driverPos.lng]} icon={driverIcon} />}
+                {geoLoads.slice(0, 12).map((load) => (
+                  <Marker
+                    key={load.id}
+                    position={[load.lat, load.lng]}
+                    icon={load.urgent ? urgentPinIcon : loadPinIcon}
+                    eventHandlers={{ click: () => handleSelectLoad(load) }}
+                  />
+                ))}
+                {activeRoute && (
+                  <>
+                    <Polyline positions={activeRoute} pathOptions={{ color: '#FBBF24', weight: 12, opacity: 0.18, lineCap: 'round' }} />
+                    <Polyline positions={activeRoute} pathOptions={{ color: '#FBBF24', weight: 6, opacity: 0.35, lineCap: 'round' }} />
+                    <Polyline positions={activeRoute} pathOptions={{ color: '#FBBF24', weight: 3.2, opacity: 1, lineCap: 'round', dashArray: '6 8' }} />
+                  </>
+                )}
+              </MapContainer>
+            </div>
+            <div className="absolute top-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-card/90 backdrop-blur px-3 py-1.5 shadow-soft">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+              </span>
+              <span className="text-[10.5px] font-semibold tracking-tight text-foreground">
+                {geoLoads.length} pinned
+              </span>
+            </div>
+            {recommendedLoads[0] && (
+              <div className="absolute bottom-3 left-3 right-3 rounded-2xl bg-card/95 backdrop-blur shadow-soft px-3 py-2.5 flex items-center gap-3">
+                <div className="h-9 w-9 rounded-xl bg-primary flex items-center justify-center shrink-0">
+                  <Truck className="h-4 w-4 text-primary-foreground" strokeWidth={2} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground font-semibold">
+                    Best match nearby
+                  </p>
+                  <p className="text-[13px] font-bold tracking-tight truncate text-foreground">
+                    {recommendedLoads[0].pickup_location} → {recommendedLoads[0].delivery_location}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleSelectLoad(recommendedLoads[0], recommendedLoads[0].matchScore)}
+                  className="shrink-0 h-9 w-9 rounded-full bg-foreground text-background flex items-center justify-center shadow-soft"
+                >
+                  <ChevronRight className="h-4 w-4" strokeWidth={2.4} />
+                </button>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* AI Recommended */}
+        {recommendedLoads.length > 0 && (
+          <section>
+            <div className="flex items-baseline justify-between mb-3 px-1">
+              <div className="flex items-center gap-2">
+                <Flame className="h-4 w-4 text-primary" strokeWidth={1.8} />
+                <h2 className="text-[18px] font-bold tracking-tight text-foreground">AI Recommended</h2>
+                <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/15 text-amber-700 dark:text-amber-300 px-2 py-0.5 text-[10px] font-semibold">
+                  <Sparkles className="h-2.5 w-2.5" /> Smart
+                </span>
+              </div>
+            </div>
+            <div className="space-y-3">
+              {recommendedLoads.map((load: any) => (
+                <ShipmentCard
+                  key={`rec-${load.id}`}
+                  id={load.tracking_code || load.id.slice(0, 8).toUpperCase()}
+                  title={load.title || load.equipment_type || 'Load'}
+                  status={load.status}
+                  pickupLocation={load.pickup_location}
+                  deliveryLocation={load.delivery_location}
+                  pickupDate={load.pickup_date}
+                  deliveryDate={load.delivery_date}
+                  price={load.price}
+                  thumbnailIcon={<Box className="h-5 w-5 text-amber-700 dark:text-amber-300" strokeWidth={1.8} />}
+                  onClick={() => handleSelectLoad(load, load.matchScore)}
+                  rightSlot={
+                    <div className="text-right shrink-0">
+                      <p className="text-[15px] font-bold tracking-tight text-foreground">
+                        ${Number(load.price || 0).toLocaleString()}
+                      </p>
+                      <p className="text-[10.5px] text-muted-foreground font-semibold mt-0.5">
+                        {load.distKm != null ? `${load.distKm.toFixed(0)} km` : `${Math.round(load.matchScore)}% match`}
+                      </p>
+                    </div>
+                  }
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* All loads */}
+        <section>
+          <div className="flex items-baseline justify-between mb-3 px-1">
+            <h2 className="text-[18px] font-bold tracking-tight text-foreground">
+              {recommendedLoads.length > 0 ? 'All Loads' : 'Available Loads'}
+            </h2>
+            <span className="text-[12px] text-muted-foreground">
+              {otherLoads.length}{geofenceEnabled ? ` · ≤${GEOFENCE_KM}km` : ''}
             </span>
           </div>
-        </div>
 
-        <div className="overflow-y-auto px-3 pb-24" style={{ height: `calc(${sheetHeight * 100}vh - 52px)` }}>
           {isLoading ? (
-            <div className="flex justify-center py-10">
+            <div className="bg-card rounded-[28px] shadow-soft p-8 flex justify-center">
               <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             </div>
           ) : geofencedLoads.length === 0 ? (
-            <div className="flex flex-col items-center py-10 text-center">
-              <p className="text-sm font-semibold text-muted-foreground">No loads found</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {geofenceEnabled ? `No loads within ${GEOFENCE_KM}km — try disabling the nearby filter` : 'Try adjusting filters or check back soon'}
+            <div className="bg-card rounded-[32px] shadow-soft p-10 text-center">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary">
+                <Package className="h-7 w-7 text-muted-foreground" strokeWidth={1.6} />
+              </div>
+              <p className="text-[15px] font-bold tracking-tight">No loads found</p>
+              <p className="text-[12px] text-muted-foreground mt-1">
+                {geofenceEnabled
+                  ? `No loads within ${GEOFENCE_KM}km — try the nearby toggle`
+                  : 'Try adjusting filters or check back soon'}
               </p>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {/* AI Recommended */}
-              {recommendedLoads.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-3 px-1">
-                    <Flame className="h-3.5 w-3.5 text-primary" strokeWidth={1.8} />
-                    <span className="heavy-label text-primary">AI Recommended</span>
-                    <span className="pill pill-amber">
-                      <Sparkles className="h-2.5 w-2.5" /> Smart
-                    </span>
-                  </div>
-                  <div className="space-y-2">
-                    {recommendedLoads.map((load: any) => (
-                      <LoadCard
-                        key={`rec-${load.id}`}
-                        load={load}
-                        onTap={() => handleSelectLoad(load, load.matchScore)}
-                        matchScore={load.matchScore}
-                        distKm={load.distKm}
-                        isRecommended
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* All other loads */}
-              {otherLoads.length > 0 && (
-                <div>
-                  <p className="heavy-label mb-3 px-1">New Trip Requests</p>
-                  <div className="space-y-2">
-                    {otherLoads.map((load: any) => (
-                      <LoadCard
-                        key={load.id}
-                        load={load}
-                        onTap={() => handleSelectLoad(load, load.matchScore)}
-                        matchScore={load.matchScore >= 40 ? load.matchScore : undefined}
-                        distKm={load.distKm}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+          ) : otherLoads.length === 0 ? null : (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-3"
+            >
+              {otherLoads.map((load: any) => (
+                <ShipmentCard
+                  key={load.id}
+                  id={load.tracking_code || load.id.slice(0, 8).toUpperCase()}
+                  title={load.title || load.equipment_type || 'Load'}
+                  status={load.status}
+                  pickupLocation={load.pickup_location}
+                  deliveryLocation={load.delivery_location}
+                  pickupDate={load.pickup_date}
+                  deliveryDate={load.delivery_date}
+                  price={load.price}
+                  thumbnailIcon={<Box className="h-5 w-5 text-muted-foreground" strokeWidth={1.6} />}
+                  onClick={() => handleSelectLoad(load, load.matchScore)}
+                  rightSlot={
+                    <div className="text-right shrink-0">
+                      <p className="text-[15px] font-bold tracking-tight text-foreground">
+                        ${Number(load.price || 0).toLocaleString()}
+                      </p>
+                      {load.distKm != null && (
+                        <p className="text-[10.5px] text-muted-foreground font-semibold mt-0.5">
+                          {load.distKm.toFixed(0)} km
+                        </p>
+                      )}
+                    </div>
+                  }
+                />
+              ))}
+            </motion.div>
           )}
-        </div>
-      </motion.div>
+        </section>
+      </main>
 
       <LoadDetailModal
         load={selectedLoad}
