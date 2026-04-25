@@ -53,6 +53,14 @@ const deliveryIcon = new L.DivIcon({
   className: '',
 });
 
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 const geoCache = new Map<string, { lat: number; lng: number }>();
 async function geocode(location: string): Promise<{ lat: number; lng: number } | null> {
   if (geoCache.has(location)) return geoCache.get(location)!;
@@ -247,20 +255,29 @@ export default function ShipperLiveView() {
 
   const filteredLoads = useMemo(() => {
     if (!loads) return [];
-    return loads.filter((l: any) => {
-      if (!statusFilter.includes(l.status)) return false;
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        const match =
-          l.pickup_location?.toLowerCase().includes(q) ||
-          l.delivery_location?.toLowerCase().includes(q) ||
-          l.title?.toLowerCase().includes(q) ||
-          l.tracking_code?.toLowerCase().includes(q);
-        if (!match) return false;
-      }
-      return true;
-    });
-  }, [loads, searchQuery, statusFilter]);
+    return loads
+      .filter((l: any) => {
+        if (!statusFilter.includes(l.status)) return false;
+        if (searchQuery) {
+          const q = searchQuery.toLowerCase();
+          const match =
+            l.pickup_location?.toLowerCase().includes(q) ||
+            l.delivery_location?.toLowerCase().includes(q) ||
+            l.title?.toLowerCase().includes(q) ||
+            l.tracking_code?.toLowerCase().includes(q);
+          if (!match) return false;
+        }
+        return true;
+      })
+      .map((l: any) => {
+        const gs = geoShipments.find((g) => g.load.id === l.id);
+        const distKm = gs?.pickup && gs?.delivery
+          ? haversineKm(gs.pickup.lat, gs.pickup.lng, gs.delivery.lat, gs.delivery.lng)
+          : null;
+        const etaMinutes = distKm != null ? Math.round((distKm / 50) * 60) : null;
+        return { ...l, distKm, etaMinutes };
+      });
+  }, [loads, searchQuery, statusFilter, geoShipments]);
 
   const featuredLoad = filteredLoads[0];
 
@@ -405,6 +422,9 @@ export default function ShipperLiveView() {
                     pickupDate={featuredLoad.pickup_date}
                     deliveryDate={featuredLoad.delivery_date}
                     price={featuredLoad.price}
+                    truckType={featuredLoad.equipment_type}
+                    distanceKm={featuredLoad.distKm ?? null}
+                    etaMinutes={featuredLoad.etaMinutes ?? null}
                     featureBox
                     onClick={() => setSelectedLoad(featuredLoad)}
                   />
@@ -428,6 +448,9 @@ export default function ShipperLiveView() {
                       pickupDate={load.pickup_date}
                       deliveryDate={load.delivery_date}
                       price={load.price}
+                      truckType={load.equipment_type}
+                      distanceKm={load.distKm ?? null}
+                      etaMinutes={load.etaMinutes ?? null}
                       featureBox
                       onClick={() => setSelectedLoad(load)}
                     />

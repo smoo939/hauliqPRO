@@ -79,25 +79,35 @@ export function MiniBoxIcon({ className = '' }: { className?: string }) {
 }
 
 /**
- * Tiny side-view truck illustration used inside the dotted progress line.
- * Adapts to currentColor + filled body, tinted by parent (white on amber).
+ * Tiny side-view semi-truck illustration matching the dashboard reference set.
+ * Inherently coloured (white box-truck cargo + lavender cab + black wheels).
  */
 export function MiniTruckIcon({ className = '' }: { className?: string }) {
   return (
-    <svg viewBox="0 0 28 18" className={className} aria-hidden="true">
-      {/* Cargo body */}
-      <rect x="1" y="3" width="14" height="10" rx="1.2" fill="currentColor" />
-      {/* Cab */}
-      <path d="M15 6 L19 6 L22 9 L22 13 L15 13 Z" fill="currentColor" />
-      {/* Window */}
-      <rect x="16.2" y="7.2" width="3.4" height="2.4" rx="0.4" fill="white" opacity="0.55" />
-      {/* Wheels */}
-      <circle cx="6" cy="14.5" r="2.4" fill="currentColor" />
-      <circle cx="6" cy="14.5" r="1" fill="white" opacity="0.6" />
-      <circle cx="18" cy="14.5" r="2.4" fill="currentColor" />
-      <circle cx="18" cy="14.5" r="1" fill="white" opacity="0.6" />
-      {/* Subtle door line */}
-      <line x1="11" y1="3" x2="11" y2="13" stroke="white" strokeWidth="0.5" opacity="0.35" />
+    <svg viewBox="0 0 32 18" className={className} aria-hidden="true">
+      {/* Cargo trailer (white with subtle shadow) */}
+      <rect x="1" y="3" width="18" height="10" rx="1.2" fill="#FFFFFF" />
+      <rect x="1" y="3" width="18" height="10" rx="1.2" fill="none" stroke="#1F2937" strokeWidth="0.6" opacity="0.18" />
+      {/* Trailer roof highlight */}
+      <rect x="1" y="3" width="18" height="1.4" rx="0.6" fill="#E5E7EB" />
+      {/* Cab (lavender) */}
+      <path d="M19 5.6 L25 5.6 L29.5 9.2 L29.5 13 L19 13 Z" fill="#8B7BD8" />
+      {/* Cab roof shadow */}
+      <path d="M19 5.6 L25 5.6 L25.6 6.6 L19 6.6 Z" fill="#6E5DBD" />
+      {/* Cab window */}
+      <path d="M20 7 L24.4 7 L27 9 L20 9 Z" fill="#FFFFFF" />
+      <path d="M20 7 L24.4 7 L27 9 L20 9 Z" fill="#BFD7F2" opacity="0.7" />
+      {/* Bumper */}
+      <rect x="28.4" y="11.2" width="1.4" height="1.8" rx="0.3" fill="#3F3656" />
+      {/* Trailer door lines */}
+      <line x1="13.5" y1="3.4" x2="13.5" y2="12.6" stroke="#1F2937" strokeWidth="0.4" opacity="0.18" />
+      {/* Wheels — outer tyre + hub */}
+      <circle cx="6.5" cy="14.4" r="2.4" fill="#1F2430" />
+      <circle cx="6.5" cy="14.4" r="0.9" fill="#FFFFFF" opacity="0.85" />
+      <circle cx="14" cy="14.4" r="2.4" fill="#1F2430" />
+      <circle cx="14" cy="14.4" r="0.9" fill="#FFFFFF" opacity="0.85" />
+      <circle cx="24.5" cy="14.4" r="2.4" fill="#1F2430" />
+      <circle cx="24.5" cy="14.4" r="0.9" fill="#FFFFFF" opacity="0.85" />
     </svg>
   );
 }

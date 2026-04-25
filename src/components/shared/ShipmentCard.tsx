@@ -1,4 +1,4 @@
-import { Map as MapIcon, Clock } from 'lucide-react';
+import { Map as MapIcon, Clock, Truck } from 'lucide-react';
 import { format } from 'date-fns';
 import { BoxIllustration, MiniBoxIcon, MiniTruckIcon } from './illustrations';
 
@@ -16,9 +16,13 @@ interface ShipmentCardProps {
   thumbnailIcon?: React.ReactNode;
   onClick?: () => void;
   rightSlot?: React.ReactNode;
+  /** When true, render the big orange 3D box on the right edge of the card */
   featureBox?: boolean;
+  /** Distance in km — shown with a map icon */
   distanceKm?: number | null;
+  /** ETA in minutes — shown with a clock icon */
   etaMinutes?: number | null;
+  /** Required truck/equipment type — shown with a truck icon */
   truckType?: string | null;
 }
 
@@ -84,7 +88,7 @@ export default function ShipmentCard({
     />
   );
 
-  const showCenterMetrics = distanceKm != null || etaMinutes != null || truckType;
+  const hasMetrics = price != null || distanceKm != null || etaMinutes != null || !!truckType;
 
   return (
     <button
@@ -92,12 +96,13 @@ export default function ShipmentCard({
       onClick={onClick}
       className="group w-full text-left bg-card rounded-[28px] shadow-soft active:scale-[0.99] transition-transform p-4 relative overflow-hidden"
     >
+      {/* Header row */}
       <div className={`flex items-start gap-3 ${featureBox ? 'pr-24' : ''}`}>
         <div className="h-11 w-11 rounded-2xl bg-secondary flex items-center justify-center shrink-0 overflow-hidden">
           {thumbnailIcon ?? <MiniBoxIcon className="h-7 w-7" />}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[17px] font-bold tracking-tight text-foreground truncate">
+          <p className="font-display-italic text-[19px] leading-tight text-foreground truncate">
             ID: {id}
           </p>
           <p className="text-[12px] text-muted-foreground truncate mt-0.5">{title}</p>
@@ -107,52 +112,67 @@ export default function ShipmentCard({
         </span>
       </div>
 
+      {/* Dotted progress with mini truck illustration */}
       <div className={`mt-4 flex items-center gap-1.5 px-1 relative ${featureBox ? 'pr-24' : ''}`}>
         {dot(stage >= 0)}
         {dash(stage >= 1)}
         {dot(stage >= 1)}
         {dash(stage >= 2)}
         <span className="relative">
-          <span className={`inline-flex h-7 w-9 items-center justify-center rounded-full ${stage >= 2 ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground'} shadow-soft`}>
-            <MiniTruckIcon className="h-4 w-[18px]" />
+          <span className={`inline-flex h-7 w-10 items-center justify-center rounded-full ${
+            stage >= 2 ? 'bg-primary' : 'bg-secondary'
+          } shadow-soft`}>
+            <MiniTruckIcon className="h-4 w-[22px]" />
           </span>
         </span>
         {dash(stage >= 3)}
         {dot(stage >= 3)}
       </div>
 
-      {showCenterMetrics && (
-        <div className={`mt-3 flex flex-wrap items-center gap-4 ${featureBox ? 'pr-24' : ''}`}>
-          {pickupLocation && deliveryLocation && (
-            <span className="inline-flex items-center gap-2 text-[12px] font-semibold text-foreground min-w-0">
-              <span className="truncate max-w-[92px]">{pickupLocation}</span>
-              <span className="h-px w-10 border-t-2 border-dotted border-muted-foreground/40" />
-              <span className="truncate max-w-[92px]">{deliveryLocation}</span>
-            </span>
-          )}
-          {distanceKm != null && (
-            <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-foreground">
-              <MapIcon className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.8} />
-              {distanceKm.toFixed(0)} KM
-            </span>
-          )}
-          {etaMinutes != null && (
-            <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-foreground">
-              <Clock className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.8} />
-              {formatEta(etaMinutes)}
+      {/* Origin → dotted → Destination */}
+      <div className={`mt-3 flex items-center gap-2 ${featureBox ? 'pr-24' : ''}`}>
+        <span className="text-[12.5px] font-semibold text-foreground truncate min-w-0 max-w-[42%]">
+          {pickupLocation}
+        </span>
+        <span className="flex-1 border-t-2 border-dotted border-muted-foreground/40" />
+        <span className="text-[12.5px] font-semibold text-foreground truncate min-w-0 max-w-[42%] text-right">
+          {deliveryLocation}
+        </span>
+      </div>
+
+      {/* Metrics row: Price • Truck • Distance • ETA */}
+      {hasMetrics && (
+        <div className={`mt-2.5 flex flex-wrap items-center gap-x-3.5 gap-y-1 ${featureBox ? 'pr-24' : ''}`}>
+          {price != null && price > 0 && (
+            <span className="font-display text-[16px] leading-none text-foreground">
+              ${Number(price).toLocaleString()}
             </span>
           )}
           {truckType && (
-            <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-foreground truncate">
-              {truckType}
+            <span className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-foreground/80">
+              <Truck className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.8} />
+              <span className="truncate max-w-[110px] capitalize">{truckType}</span>
+            </span>
+          )}
+          {distanceKm != null && (
+            <span className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-foreground/80">
+              <MapIcon className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.8} />
+              {distanceKm.toFixed(0)} km
+            </span>
+          )}
+          {etaMinutes != null && (
+            <span className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-foreground/80">
+              <Clock className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.8} />
+              {formatEta(etaMinutes)}
             </span>
           )}
         </div>
       )}
 
-      <div className={`mt-3 flex items-end justify-between gap-3 ${featureBox ? 'pr-24' : ''}`}>
-        <div className="min-w-0 flex-1">
-          {pickupDate && (
+      {/* Dates footer */}
+      {(pickupDate || rightSlot) && (
+        <div className={`mt-2.5 flex items-end justify-between gap-3 ${featureBox ? 'pr-24' : ''}`}>
+          {pickupDate ? (
             <p className="text-[11px] text-muted-foreground">
               {format(new Date(pickupDate), 'd MMM yy')}
               {deliveryDate && (
@@ -161,20 +181,12 @@ export default function ShipmentCard({
                 </span>
               )}
             </p>
-          )}
-          <p className="text-[12px] font-semibold text-foreground truncate mt-0.5">
-            {pickupLocation}
-            <span className="text-muted-foreground font-normal"> → </span>
-            {deliveryLocation}
-          </p>
+          ) : <span />}
+          {!featureBox && rightSlot}
         </div>
-        {!featureBox && (rightSlot ?? (price != null && price > 0 && (
-          <p className="text-[15px] font-bold tracking-tight whitespace-nowrap">
-            ${Number(price).toLocaleString()}
-          </p>
-        )))}
-      </div>
+      )}
 
+      {/* Big orange 3D feature box */}
       {featureBox && (
         <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
           <BoxIllustration className="h-[110px] w-[110px] drop-shadow-[0_10px_20px_rgba(217,80,0,0.25)]" />

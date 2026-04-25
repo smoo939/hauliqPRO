@@ -360,6 +360,7 @@ export default function DriverHomeView() {
                     pickupDate={featuredLoad.pickup_date}
                     deliveryDate={featuredLoad.delivery_date}
                     price={featuredLoad.price}
+                    truckType={featuredLoad.equipment_type}
                     distanceKm={featuredLoad.distKm ?? null}
                     etaMinutes={featuredLoad.distKm != null ? Math.round((featuredLoad.distKm / 50) * 60) : null}
                     featureBox
@@ -385,6 +386,7 @@ export default function DriverHomeView() {
                       pickupDate={load.pickup_date}
                       deliveryDate={load.delivery_date}
                       price={load.price}
+                      truckType={load.equipment_type}
                       distanceKm={load.distKm ?? null}
                       etaMinutes={load.distKm != null ? Math.round((load.distKm / 50) * 60) : null}
                       featureBox
