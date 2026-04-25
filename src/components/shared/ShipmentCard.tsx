@@ -16,12 +16,10 @@ interface ShipmentCardProps {
   thumbnailIcon?: React.ReactNode;
   onClick?: () => void;
   rightSlot?: React.ReactNode;
-  /** When true, render the big orange 3D box on the right edge of the card */
   featureBox?: boolean;
-  /** Carrier-only: distance in km to show with map icon */
   distanceKm?: number | null;
-  /** Carrier-only: ETA minutes to show with clock icon */
   etaMinutes?: number | null;
+  truckType?: string | null;
 }
 
 const STAGE_INDEX: Record<string, number> = {
@@ -65,6 +63,7 @@ export default function ShipmentCard({
   featureBox = false,
   distanceKm,
   etaMinutes,
+  truckType,
 }: ShipmentCardProps) {
   const stage = STAGE_INDEX[status] ?? 0;
   const pill = STAGE_PILL[status] ?? STAGE_PILL.posted;
@@ -72,9 +71,7 @@ export default function ShipmentCard({
   const dot = (active: boolean) => (
     <span
       className={`h-2.5 w-2.5 rounded-full ${
-        active
-          ? 'bg-primary ring-[3px] ring-primary/20'
-          : 'bg-card border-2 border-muted'
+        active ? 'bg-primary ring-[3px] ring-primary/20' : 'bg-card border-2 border-muted'
       }`}
     />
   );
@@ -87,7 +84,7 @@ export default function ShipmentCard({
     />
   );
 
-  const showCenterMetrics = distanceKm != null || etaMinutes != null;
+  const showCenterMetrics = distanceKm != null || etaMinutes != null || truckType;
 
   return (
     <button
@@ -95,13 +92,12 @@ export default function ShipmentCard({
       onClick={onClick}
       className="group w-full text-left bg-card rounded-[28px] shadow-soft active:scale-[0.99] transition-transform p-4 relative overflow-hidden"
     >
-      {/* Header row */}
       <div className={`flex items-start gap-3 ${featureBox ? 'pr-24' : ''}`}>
         <div className="h-11 w-11 rounded-2xl bg-secondary flex items-center justify-center shrink-0 overflow-hidden">
           {thumbnailIcon ?? <MiniBoxIcon className="h-7 w-7" />}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[15px] font-bold tracking-tight text-foreground truncate">
+          <p className="text-[17px] font-bold tracking-tight text-foreground truncate">
             ID: {id}
           </p>
           <p className="text-[12px] text-muted-foreground truncate mt-0.5">{title}</p>
@@ -111,16 +107,13 @@ export default function ShipmentCard({
         </span>
       </div>
 
-      {/* Dotted progress with mini truck illustration */}
       <div className={`mt-4 flex items-center gap-1.5 px-1 relative ${featureBox ? 'pr-24' : ''}`}>
         {dot(stage >= 0)}
         {dash(stage >= 1)}
         {dot(stage >= 1)}
         {dash(stage >= 2)}
         <span className="relative">
-          <span className={`inline-flex h-7 w-9 items-center justify-center rounded-full ${
-            stage >= 2 ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground'
-          } shadow-soft`}>
+          <span className={`inline-flex h-7 w-9 items-center justify-center rounded-full ${stage >= 2 ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground'} shadow-soft`}>
             <MiniTruckIcon className="h-4 w-[18px]" />
           </span>
         </span>
@@ -128,9 +121,15 @@ export default function ShipmentCard({
         {dot(stage >= 3)}
       </div>
 
-      {/* Carrier center metrics: Distance + ETA */}
       {showCenterMetrics && (
-        <div className={`mt-3 flex items-center gap-4 ${featureBox ? 'pr-24' : ''}`}>
+        <div className={`mt-3 flex flex-wrap items-center gap-4 ${featureBox ? 'pr-24' : ''}`}>
+          {pickupLocation && deliveryLocation && (
+            <span className="inline-flex items-center gap-2 text-[12px] font-semibold text-foreground min-w-0">
+              <span className="truncate max-w-[92px]">{pickupLocation}</span>
+              <span className="h-px w-10 border-t-2 border-dotted border-muted-foreground/40" />
+              <span className="truncate max-w-[92px]">{deliveryLocation}</span>
+            </span>
+          )}
           {distanceKm != null && (
             <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-foreground">
               <MapIcon className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.8} />
@@ -143,10 +142,14 @@ export default function ShipmentCard({
               {formatEta(etaMinutes)}
             </span>
           )}
+          {truckType && (
+            <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-foreground truncate">
+              {truckType}
+            </span>
+          )}
         </div>
       )}
 
-      {/* Dates + locations */}
       <div className={`mt-3 flex items-end justify-between gap-3 ${featureBox ? 'pr-24' : ''}`}>
         <div className="min-w-0 flex-1">
           {pickupDate && (
@@ -172,7 +175,6 @@ export default function ShipmentCard({
         )))}
       </div>
 
-      {/* Big orange 3D feature box */}
       {featureBox && (
         <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
           <BoxIllustration className="h-[110px] w-[110px] drop-shadow-[0_10px_20px_rgba(217,80,0,0.25)]" />
