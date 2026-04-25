@@ -5,7 +5,7 @@ import DynamicTileLayer from '@/components/map/DynamicTileLayer';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
-  Search, Sparkles, Box, Radar, Filter, Truck, Package, ChevronUp, ChevronDown,
+  Search, Sparkles, Radar, Package, ChevronUp, ChevronDown,
 } from 'lucide-react';
 import { motion, useMotionValue, animate } from 'framer-motion';
 import LoadDetailModal from '@/components/driver/LoadDetailModal';
@@ -360,18 +360,10 @@ export default function DriverHomeView() {
                     pickupDate={featuredLoad.pickup_date}
                     deliveryDate={featuredLoad.delivery_date}
                     price={featuredLoad.price}
-                    thumbnailIcon={<Box className="h-5 w-5 text-amber-700 dark:text-amber-300" strokeWidth={1.8} />}
+                    distanceKm={featuredLoad.distKm ?? null}
+                    etaMinutes={featuredLoad.distKm != null ? Math.round((featuredLoad.distKm / 50) * 60) : null}
+                    featureBox
                     onClick={() => handleSelectLoad(featuredLoad, featuredLoad.matchScore)}
-                    rightSlot={
-                      <div className="text-right shrink-0">
-                        <p className="text-[15px] font-bold tracking-tight text-foreground">
-                          ${Number(featuredLoad.price || 0).toLocaleString()}
-                        </p>
-                        <p className="text-[10.5px] text-muted-foreground font-semibold mt-0.5">
-                          {featuredLoad.distKm != null ? `${featuredLoad.distKm.toFixed(0)} km` : `${Math.round(featuredLoad.matchScore)}%`}
-                        </p>
-                      </div>
-                    }
                   />
                 </div>
               )}
@@ -393,20 +385,10 @@ export default function DriverHomeView() {
                       pickupDate={load.pickup_date}
                       deliveryDate={load.delivery_date}
                       price={load.price}
-                      thumbnailIcon={<Box className="h-5 w-5 text-muted-foreground" strokeWidth={1.6} />}
+                      distanceKm={load.distKm ?? null}
+                      etaMinutes={load.distKm != null ? Math.round((load.distKm / 50) * 60) : null}
+                      featureBox
                       onClick={() => handleSelectLoad(load, load.matchScore)}
-                      rightSlot={
-                        <div className="text-right shrink-0">
-                          <p className="text-[15px] font-bold tracking-tight text-foreground">
-                            ${Number(load.price || 0).toLocaleString()}
-                          </p>
-                          {load.distKm != null && (
-                            <p className="text-[10.5px] text-muted-foreground font-semibold mt-0.5">
-                              {load.distKm.toFixed(0)} km
-                            </p>
-                          )}
-                        </div>
-                      }
                     />
                   ))}
                 </div>

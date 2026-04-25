@@ -102,6 +102,21 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     letter-spacing: -0.005em;
+    /* Soft radial mesh gradient — subtle pastels behind the cards */
+    background-image:
+      radial-gradient(at 12% 8%,  hsla(43, 60%, 92%, 0.55) 0px, transparent 45%),
+      radial-gradient(at 88% 6%,  hsla(180, 28%, 90%, 0.55) 0px, transparent 50%),
+      radial-gradient(at 92% 92%, hsla(155, 30%, 90%, 0.55) 0px, transparent 45%),
+      radial-gradient(at 8% 92%,  hsla(28, 55%, 92%, 0.40) 0px, transparent 50%);
+    background-attachment: fixed;
+    background-color: hsl(var(--background));
+  }
+  .dark body {
+    background-image:
+      radial-gradient(at 12% 8%,  hsla(43, 30%, 14%, 0.55) 0px, transparent 50%),
+      radial-gradient(at 88% 6%,  hsla(200, 28%, 12%, 0.55) 0px, transparent 50%),
+      radial-gradient(at 92% 92%, hsla(155, 25%, 12%, 0.50) 0px, transparent 45%),
+      radial-gradient(at 8% 92%,  hsla(28, 35%, 12%, 0.40) 0px, transparent 50%);
   }
   h1, h2, h3, h4 {
     letter-spacing: -0.02em;

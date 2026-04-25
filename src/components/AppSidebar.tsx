@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 import {
   Sheet,
   SheetContent,
@@ -10,14 +11,13 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import {
   User, LogOut, Shield, Truck, CreditCard, Star,
   Moon, Sun, ArrowLeftRight, HelpCircle,
   Menu, DollarSign, Bell, MapPin, ChevronRight,
-  Lock, Info, Package, FileText,
+  Lock, Info, Package, FileText, Camera,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -26,13 +26,23 @@ interface AppSidebarProps {
 }
 
 export default function AppSidebar({ role }: AppSidebarProps) {
-  const { user, profile, signOut, setRole } = useAuth();
+  const { user, profile, signOut, setRole, refreshProfile } = useAuth();
   const { resolvedTheme, setTheme } = useTheme();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const base = role === 'driver' ? '/driver' : '/shipper';
+
+  const initials = (profile?.full_name || user?.email || 'U')
+    .split(' ')
+    .map((s) => s[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
 
   const handleSignOut = async () => {
     setOpen(false);
@@ -58,6 +68,42 @@ export default function AppSidebar({ role }: AppSidebarProps) {
   const go = (path: string) => {
     setOpen(false);
     navigate(path);
+  };
+
+  const handleAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !user) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please choose an image file');
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      toast.error('Image must be under 4MB');
+      return;
+    }
+    setUploadingAvatar(true);
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
+      const path = `avatars/${user.id}-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from('verification-documents')
+        .upload(path, file);
+      if (upErr) throw upErr;
+      const { data } = supabase.storage.from('verification-documents').getPublicUrl(path);
+      const publicUrl = data.publicUrl;
+      const { error: updErr } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl })
+        .eq('user_id', user.id);
+      if (updErr) throw updErr;
+      await refreshProfile();
+      toast.success('Profile picture updated');
+    } catch (err: any) {
+      toast.error(err.message || 'Could not upload image');
+    } finally {
+      setUploadingAvatar(false);
+    }
   };
 
   const driverItems = [
@@ -90,18 +136,72 @@ export default function AppSidebar({ role }: AppSidebarProps) {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <button className="flex h-10 w-10 items-center justify-center rounded-2xl glass shadow-soft">
-          <Menu className="h-4 w-4 text-foreground" strokeWidth={1.8} />
+        <button
+          aria-label="Open menu"
+          className="flex h-10 w-10 items-center justify-center rounded-full overflow-hidden glass shadow-soft"
+        >
+          {profile?.avatar_url ? (
+            <img
+              src={profile.avatar_url}
+              alt=""
+              className="h-full w-full object-cover"
+              loading="lazy"
+            />
+          ) : (
+            <Menu className="h-4 w-4 text-foreground" strokeWidth={1.8} />
+          )}
         </button>
       </SheetTrigger>
+
       <SheetContent side="left" className="w-[300px] p-0 flex flex-col bg-background">
+        {/* Hidden file input for avatar upload */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleAvatarFile}
+        />
+
         {/* Profile header */}
         <div className="p-5 pb-3 shrink-0">
           <SheetHeader className="text-left">
             <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary glow-amber">
-                <User className="h-6 w-6 text-primary-foreground" strokeWidth={1.8} />
-              </div>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingAvatar}
+                aria-label="Upload profile picture"
+                className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-full overflow-hidden bg-primary glow-amber group"
+              >
+                {profile?.avatar_url ? (
+                  <img
+                    src={profile.avatar_url}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="text-[18px] font-bold text-primary-foreground tracking-tight">
+                    {initials}
+                  </span>
+                )}
+                {/* Camera overlay */}
+                <span className="absolute inset-0 flex items-center justify-center bg-foreground/40 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {uploadingAvatar ? (
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  ) : (
+                    <Camera className="h-4 w-4 text-white" strokeWidth={1.8} />
+                  )}
+                </span>
+                {/* Always-visible tiny camera badge */}
+                <span className="absolute -bottom-0.5 -right-0.5 h-5 w-5 rounded-full bg-card shadow-soft flex items-center justify-center">
+                  {uploadingAvatar ? (
+                    <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  ) : (
+                    <Camera className="h-2.5 w-2.5 text-foreground" strokeWidth={2} />
+                  )}
+                </span>
+              </button>
               <div className="flex-1 min-w-0">
                 <SheetTitle className="text-[15px] font-bold truncate tracking-tight">
                   {profile?.full_name || 'User'}
@@ -112,6 +212,9 @@ export default function AppSidebar({ role }: AppSidebarProps) {
                 </span>
               </div>
             </div>
+            <p className="mt-2 text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground/70 font-semibold">
+              Tap photo to change
+            </p>
           </SheetHeader>
         </div>
 

@@ -405,6 +405,7 @@ export default function ShipperLiveView() {
                     pickupDate={featuredLoad.pickup_date}
                     deliveryDate={featuredLoad.delivery_date}
                     price={featuredLoad.price}
+                    featureBox
                     onClick={() => setSelectedLoad(featuredLoad)}
                   />
                 </div>
@@ -427,6 +428,7 @@ export default function ShipperLiveView() {
                       pickupDate={load.pickup_date}
                       deliveryDate={load.delivery_date}
                       price={load.price}
+                      featureBox
                       onClick={() => setSelectedLoad(load)}
                     />
                   ))}
