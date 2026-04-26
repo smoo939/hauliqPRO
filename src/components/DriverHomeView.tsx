@@ -353,17 +353,14 @@ export default function DriverHomeView() {
                   )}
                   <ShipmentCard
                     id={featuredLoad.tracking_code || featuredLoad.id.slice(0, 8).toUpperCase()}
-                    title={featuredLoad.title || featuredLoad.equipment_type || 'Load'}
                     status={featuredLoad.status}
                     pickupLocation={featuredLoad.pickup_location}
                     deliveryLocation={featuredLoad.delivery_location}
-                    pickupDate={featuredLoad.pickup_date}
-                    deliveryDate={featuredLoad.delivery_date}
+                    postedAt={featuredLoad.created_at}
                     price={featuredLoad.price}
                     truckType={featuredLoad.equipment_type}
-                    distanceKm={featuredLoad.distKm ?? null}
-                    etaMinutes={featuredLoad.distKm != null ? Math.round((featuredLoad.distKm / 50) * 60) : null}
-                    featureBox
+                    bookmarkable
+                    bookmarkId={featuredLoad.id}
                     onClick={() => handleSelectLoad(featuredLoad, featuredLoad.matchScore)}
                   />
                 </div>
@@ -379,17 +376,14 @@ export default function DriverHomeView() {
                     <ShipmentCard
                       key={load.id}
                       id={load.tracking_code || load.id.slice(0, 8).toUpperCase()}
-                      title={load.title || load.equipment_type || 'Load'}
                       status={load.status}
                       pickupLocation={load.pickup_location}
                       deliveryLocation={load.delivery_location}
-                      pickupDate={load.pickup_date}
-                      deliveryDate={load.delivery_date}
+                      postedAt={load.created_at}
                       price={load.price}
                       truckType={load.equipment_type}
-                      distanceKm={load.distKm ?? null}
-                      etaMinutes={load.distKm != null ? Math.round((load.distKm / 50) * 60) : null}
-                      featureBox
+                      bookmarkable
+                      bookmarkId={load.id}
                       onClick={() => handleSelectLoad(load, load.matchScore)}
                     />
                   ))}

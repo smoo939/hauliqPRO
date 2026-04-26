@@ -415,17 +415,12 @@ export default function ShipperLiveView() {
                   )}
                   <ShipmentCard
                     id={featuredLoad.tracking_code || featuredLoad.id.slice(0, 8).toUpperCase()}
-                    title={featuredLoad.title || featuredLoad.equipment_type || 'Shipment'}
                     status={featuredLoad.status}
                     pickupLocation={featuredLoad.pickup_location}
                     deliveryLocation={featuredLoad.delivery_location}
-                    pickupDate={featuredLoad.pickup_date}
-                    deliveryDate={featuredLoad.delivery_date}
+                    postedAt={featuredLoad.created_at}
                     price={featuredLoad.price}
                     truckType={featuredLoad.equipment_type}
-                    distanceKm={featuredLoad.distKm ?? null}
-                    etaMinutes={featuredLoad.etaMinutes ?? null}
-                    featureBox
                     onClick={() => setSelectedLoad(featuredLoad)}
                   />
                 </div>
@@ -441,17 +436,12 @@ export default function ShipperLiveView() {
                     <ShipmentCard
                       key={load.id}
                       id={load.tracking_code || load.id.slice(0, 8).toUpperCase()}
-                      title={load.title || load.equipment_type || 'Shipment'}
                       status={load.status}
                       pickupLocation={load.pickup_location}
                       deliveryLocation={load.delivery_location}
-                      pickupDate={load.pickup_date}
-                      deliveryDate={load.delivery_date}
+                      postedAt={load.created_at}
                       price={load.price}
                       truckType={load.equipment_type}
-                      distanceKm={load.distKm ?? null}
-                      etaMinutes={load.etaMinutes ?? null}
-                      featureBox
                       onClick={() => setSelectedLoad(load)}
                     />
                   ))}

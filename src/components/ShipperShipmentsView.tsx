@@ -2,18 +2,16 @@ import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { MessageCircle, Package, XCircle, Star, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
-import { format } from 'date-fns';
 import LoadChat from '@/components/LoadChat';
 import { BidList } from '@/components/BidSystem';
 import { AICarrierMatch, AIDynamicPricing } from '@/components/AILoadInsights';
 import StatusMilestones from '@/components/StatusMilestones';
 import LiveTrackingMap from '@/components/LiveTrackingMap';
+import ShipmentCard from '@/components/shared/ShipmentCard';
 import {
   Dialog,
   DialogContent,
@@ -23,14 +21,6 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-
-const statusColors: Record<string, string> = {
-  posted: 'pill pill-amber',
-  accepted: 'pill pill-amber',
-  in_transit: 'pill pill-warning',
-  delivered: 'pill pill-success',
-  cancelled: 'pill pill-danger',
-};
 
 const CANCEL_REASONS = [
   'Change of plans',
@@ -71,6 +61,7 @@ export default function ShipperShipmentsView() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [chatLoadId, setChatLoadId] = useState<string | null>(null);
+  const [bidsOpenLoadId, setBidsOpenLoadId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'active' | 'completed'>('active');
   const [cancelLoadId, setCancelLoadId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState('');
@@ -90,6 +81,28 @@ export default function ShipperShipmentsView() {
       return data;
     },
     enabled: !!user,
+  });
+
+  const loadIds = (loads || []).map((l: any) => l.id);
+
+  const { data: bidCounts } = useQuery<Record<string, number>>({
+    queryKey: ['shipper-bid-counts', user?.id, loadIds.join(',')],
+    queryFn: async () => {
+      if (!loadIds.length) return {};
+      const { data, error } = await supabase
+        .from('bids')
+        .select('load_id, status')
+        .in('load_id', loadIds);
+      if (error) throw error;
+      const counts: Record<string, number> = {};
+      for (const bid of data || []) {
+        if (bid.status === 'rejected') continue;
+        counts[bid.load_id] = (counts[bid.load_id] || 0) + 1;
+      }
+      return counts;
+    },
+    enabled: !!user && loadIds.length > 0,
+    refetchInterval: 15000,
   });
 
   const { data: myReviews } = useQuery({
@@ -209,148 +222,163 @@ export default function ShipperShipmentsView() {
       ) : (
         <div className="space-y-3">
           <AnimatePresence>
-            {displayLoads.map((load: any, i: number) => (
-              <motion.div key={load.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: i * 0.06 }}>
-                <Card className="overflow-hidden border-border/60 hover:border-primary/30 transition-all">
-                  <CardContent className="p-0">
-                    {/* Header row */}
-                    <div className="flex items-center justify-between px-4 pt-3 pb-2">
-                      <div className="flex items-center gap-1.5">
-                        <span className={statusColors[load.status] || 'pill pill-muted'}>
-                          {load.status.replace('_', ' ')}
-                        </span>
-                        {load.urgent && (
-                          <Badge variant="outline" className="text-[10px] uppercase tracking-wide font-bold bg-destructive/10 text-destructive border-destructive/30">
-                            🚨 Urgent
-                          </Badge>
-                        )}
-                      </div>
-                      <span className="text-sm font-black text-foreground">${Number(load.price).toFixed(0)}</span>
-                    </div>
+            {displayLoads.map((load: any, i: number) => {
+              const count = bidCounts?.[load.id] ?? 0;
+              const showBidsButton = load.status === 'posted';
+              const bidsExpanded = bidsOpenLoadId === load.id;
+              return (
+                <motion.div
+                  key={load.id}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: i * 0.06 }}
+                  className="space-y-2"
+                >
+                  <ShipmentCard
+                    id={load.tracking_code || load.id.slice(0, 8).toUpperCase()}
+                    status={load.status}
+                    pickupLocation={load.pickup_location}
+                    deliveryLocation={load.delivery_location}
+                    postedAt={load.created_at}
+                    price={load.price}
+                    truckType={load.equipment_type}
+                    bidCount={showBidsButton ? count : null}
+                    onBidsClick={
+                      showBidsButton
+                        ? () => setBidsOpenLoadId(bidsExpanded ? null : load.id)
+                        : undefined
+                    }
+                    onClick={() => {
+                      if (showBidsButton) {
+                        setBidsOpenLoadId(bidsExpanded ? null : load.id);
+                      }
+                    }}
+                  />
 
-                    {/* Route */}
-                    <div className="px-4 pb-3">
-                      <div className="flex items-start gap-3">
-                        <div className="flex flex-col items-center gap-0.5 pt-1">
-                          <div className="h-2 w-2 rounded-full bg-primary" />
-                          <div className="w-px h-6 bg-border" />
-                          <div className="h-2 w-2 rounded-full border-2 border-primary" />
+                  {/* Tracking + status milestones for accepted/in_transit loads */}
+                  {['accepted', 'in_transit'].includes(load.status) && (
+                    <div className="rounded-2xl bg-card shadow-soft p-4 space-y-3">
+                      <StatusMilestones currentStatus={load.status} />
+                      {load.status === 'in_transit' && load.driver_id && (
+                        <LiveTrackingMap
+                          loadId={load.id}
+                          driverId={load.driver_id}
+                          pickupLocation={load.pickup_location}
+                          deliveryLocation={load.delivery_location}
+                        />
+                      )}
+                    </div>
+                  )}
+
+                  {/* Bids panel — toggled by the bid pill on the card */}
+                  {showBidsButton && bidsExpanded && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="rounded-2xl bg-card shadow-soft p-4 space-y-3"
+                    >
+                      <div className="flex flex-wrap gap-2">
+                        <AICarrierMatch load={load} />
+                        <AIDynamicPricing load={load} />
+                      </div>
+                      <BidList
+                        loadId={load.id}
+                        onAcceptBid={(bidId, driverId, amount) =>
+                          acceptBid.mutate({ bidId, driverId, amount, loadId: load.id })
+                        }
+                      />
+                    </motion.div>
+                  )}
+
+                  {/* Post-delivery rating for shippers */}
+                  {load.status === 'delivered' &&
+                    load.driver_id &&
+                    !reviewedLoadIds.has(load.id) && (
+                      <div className="rounded-2xl bg-primary/5 border border-primary/20 p-4 flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-bold">Rate Your Carrier</p>
+                          <p className="text-xs text-muted-foreground">How was the delivery experience?</p>
                         </div>
-                        <div className="flex-1 min-w-0 space-y-2">
-                          <div><p className="heavy-label">Pickup</p><p className="text-sm font-medium truncate">{load.pickup_location}</p></div>
-                          <div><p className="heavy-label">Delivery</p><p className="text-sm font-medium truncate">{load.delivery_location}</p></div>
-                        </div>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setChatLoadId(chatLoadId === load.id ? null : load.id)}>
-                          <MessageCircle className="h-4 w-4" />
+                        <Button
+                          size="sm"
+                          className="bg-primary text-primary-foreground font-bold glow-amber"
+                          onClick={() => {
+                            setRatingLoadId(load.id);
+                            setRatingDriverId(load.driver_id);
+                          }}
+                        >
+                          <Star className="h-3.5 w-3.5 mr-1" /> Rate
                         </Button>
                       </div>
-                    </div>
-
-                    {/* Footer row */}
-                    <div className="flex items-center gap-3 px-4 py-2 bg-muted/30 border-t border-border/40 text-xs text-muted-foreground">
-                      <span className="font-semibold text-foreground truncate">{load.title}</span>
-                      <span className="ml-auto shrink-0">{load.pickup_date ? format(new Date(load.pickup_date), 'MMM d') : ''}</span>
-                      {load.equipment_type && <span>· {load.equipment_type}</span>}
-                    </div>
-
-                    {/* Status milestones & map */}
-                    {['accepted', 'in_transit'].includes(load.status) && (
-                      <div className="px-4 py-3 border-t border-border/40 space-y-3">
-                        <StatusMilestones currentStatus={load.status} />
-                        {load.status === 'in_transit' && load.driver_id && (
-                          <LiveTrackingMap
-                            loadId={load.id}
-                            driverId={load.driver_id}
-                            pickupLocation={load.pickup_location}
-                            deliveryLocation={load.delivery_location}
-                          />
-                        )}
-                      </div>
                     )}
+                  {load.status === 'delivered' && reviewedLoadIds.has(load.id) && (
+                    <p className="px-4 text-xs text-success font-semibold flex items-center gap-1">
+                      <Star className="h-3 w-3 fill-success" /> Carrier rated
+                    </p>
+                  )}
 
-                    {/* Bids section */}
-                    {load.status === 'posted' && (
-                      <div className="px-4 py-3 border-t border-border/40 space-y-3">
-                        <div className="flex flex-wrap gap-2">
-                          <AICarrierMatch load={load} />
-                          <AIDynamicPricing load={load} />
-                        </div>
-                        <BidList loadId={load.id} onAcceptBid={(bidId, driverId, amount) => acceptBid.mutate({ bidId, driverId, amount, loadId: load.id })} />
-                      </div>
-                    )}
+                  {/* Cancellation info */}
+                  {load.status === 'cancelled' && load.cancellation_reason && (
+                    <p className="px-4 text-xs text-muted-foreground">
+                      Reason: {load.cancellation_reason}
+                    </p>
+                  )}
 
-                    {/* Post-delivery rating for shippers */}
-                    {load.status === 'delivered' && load.driver_id && !reviewedLoadIds.has(load.id) && (
-                      <div className="px-4 py-3 border-t border-primary/20 bg-primary/5">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-bold">Rate Your Carrier</p>
-                            <p className="text-xs text-muted-foreground">How was the delivery experience?</p>
-                          </div>
-                          <Button
-                            size="sm"
-                            className="bg-primary text-primary-foreground font-bold glow-amber"
-                            onClick={() => { setRatingLoadId(load.id); setRatingDriverId(load.driver_id); }}
-                          >
-                            <Star className="h-3.5 w-3.5 mr-1" /> Rate
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                    {load.status === 'delivered' && reviewedLoadIds.has(load.id) && (
-                      <div className="px-4 py-2 border-t border-border/40">
-                        <p className="text-xs text-success font-semibold flex items-center gap-1">
-                          <Star className="h-3 w-3 fill-success" /> Carrier rated
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Cancellation info */}
-                    {load.status === 'cancelled' && load.cancellation_reason && (
-                      <div className="px-4 py-2 border-t border-border/40">
-                        <p className="text-xs text-muted-foreground">Reason: {load.cancellation_reason}</p>
-                      </div>
-                    )}
-
-                    {/* Cancel / Delete buttons for active loads */}
-                    {['posted', 'accepted'].includes(load.status) && (
-                      <div className="px-4 py-2 border-t border-border/40 flex items-center gap-2">
+                  {/* Action row: chat / cancel / delete */}
+                  {(['posted', 'accepted', 'in_transit'].includes(load.status)) && (
+                    <div className="flex items-center gap-1 px-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs gap-1"
+                        onClick={() => setChatLoadId(chatLoadId === load.id ? null : load.id)}
+                      >
+                        <MessageCircle className="h-3.5 w-3.5" /> Chat
+                      </Button>
+                      {['posted', 'accepted'].includes(load.status) && (
                         <Button
                           variant="ghost"
                           size="sm"
                           className="text-destructive hover:text-destructive hover:bg-destructive/10 text-xs gap-1"
-                          onClick={() => { setCancelLoadId(load.id); setCancelReason(''); }}
+                          onClick={() => {
+                            setCancelLoadId(load.id);
+                            setCancelReason('');
+                          }}
                         >
                           <XCircle className="h-3.5 w-3.5" /> Cancel
                         </Button>
-                        {load.status === 'posted' && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 text-xs gap-1 ml-auto"
-                            disabled={deleteLoad.isPending}
-                            onClick={() => {
-                              if (window.confirm('Delete this load? It will be removed from the marketplace.')) {
-                                deleteLoad.mutate(load.id);
-                              }
-                            }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" /> Delete
-                          </Button>
-                        )}
-                      </div>
-                    )}
+                      )}
+                      {load.status === 'posted' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 text-xs gap-1 ml-auto"
+                          disabled={deleteLoad.isPending}
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                'Delete this load? It will be removed from the marketplace.',
+                              )
+                            ) {
+                              deleteLoad.mutate(load.id);
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" /> Delete
+                        </Button>
+                      )}
+                    </div>
+                  )}
 
-                    {/* Chat */}
-                    {chatLoadId === load.id && (
-                      <div className="px-4 py-3 border-t border-border/40">
-                        <LoadChat loadId={load.id} loadStatus={load.status} />
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
+                  {/* Chat */}
+                  {chatLoadId === load.id && (
+                    <div className="rounded-2xl bg-card shadow-soft p-4">
+                      <LoadChat loadId={load.id} loadStatus={load.status} />
+                    </div>
+                  )}
+                </motion.div>
+              );
+            })}
           </AnimatePresence>
         </div>
       )}
