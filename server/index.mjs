@@ -415,45 +415,37 @@ Rules:
 - Always respond in clear, structured text.
 - Adapt tone and detail depending on whether the user is a shipper or carrier.`;
 
-const HF_CHAT_URL = "https://router.huggingface.co/v1/chat/completions";
-const HF_MODEL = "meta-llama/Llama-3.1-8B-Instruct:novita";
+const GEMINI_CHAT_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+const GEMINI_MODEL = "gemini-2.0-flash";
 
-async function callHuggingFaceChat(messages, role) {
-  const apiKey = process.env.HF_API_KEY;
-  if (!apiKey) throw new Error("HF_API_KEY is not configured. Add it in Secrets.");
-  const systemContent = role
+function buildSystemContent(role) {
+  return role
     ? `${HAULIQ_SYSTEM_PROMPT}\n\nThe current user role is: ${String(role).toUpperCase()}.`
     : HAULIQ_SYSTEM_PROMPT;
-  const resp = await fetch(HF_CHAT_URL, {
+}
+
+async function callGeminiChat(messages, role, { stream = false } = {}) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("GEMINI_API_KEY is not configured. Add it in Secrets.");
+  const resp = await fetch(GEMINI_CHAT_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      model: HF_MODEL,
-      messages: [{ role: "system", content: systemContent }, ...messages],
-      max_tokens: 600,
-      temperature: 0.5
+      model: GEMINI_MODEL,
+      messages: [{ role: "system", content: buildSystemContent(role) }, ...messages],
+      stream
     })
   });
-  if (!resp.ok) {
-    const errText = await resp.text();
-    throw new Error(`Hugging Face request failed (${resp.status}): ${errText.slice(0, 200)}`);
-  }
-  const data = await resp.json();
-  return data?.choices?.[0]?.message?.content || "";
-}
-
-function sseChunk(content) {
-  const payload = { choices: [{ delta: { content } }] };
-  return `data: ${JSON.stringify(payload)}\n\n`;
+  return resp;
 }
 
 async function handleFunction(name, body) {
   if (name === "ai-chatbot") {
-    if (!process.env.HF_API_KEY) {
-      return { status: 500, body: { error: "HF_API_KEY is not configured. Add it in Secrets." } };
+    if (!process.env.GEMINI_API_KEY) {
+      return { status: 500, body: { error: "GEMINI_API_KEY is not configured. Add it in Secrets." } };
     }
     try {
       const role = body.userContext?.role;
@@ -461,40 +453,31 @@ async function handleFunction(name, body) {
         role: m.role === "assistant" ? "assistant" : "user",
         content: String(m.content || "")
       }));
-      const text = await callHuggingFaceChat(messages, role);
-      // Wrap as a single OpenAI-style SSE chunk so the existing frontend streaming parser works.
-      const stream = new ReadableStream({
-        start(controller) {
-          controller.enqueue(new TextEncoder().encode(sseChunk(text)));
-          controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
-          controller.close();
-        }
-      });
-      return {
-        proxy: {
-          status: 200,
-          headers: new Map([
-            ["content-type", "text/event-stream"],
-            ["cache-control", "no-cache"],
-            ["connection", "keep-alive"]
-          ]),
-          body: stream
-        }
-      };
+      const resp = await callGeminiChat(messages, role, { stream: true });
+      if (!resp.ok) {
+        const errText = await resp.text();
+        return { status: resp.status, body: { error: `Gemini request failed: ${errText.slice(0, 200)}` } };
+      }
+      return { proxy: resp };
     } catch (err) {
-      return { status: 500, body: { error: err?.message || "Hugging Face request failed" } };
+      return { status: 500, body: { error: err?.message || "Gemini request failed" } };
     }
   }
   if (name === "ai-load-matching") {
     const load = body.load || {};
     const basePrice = Number(load.price || 0);
-    if (!process.env.HF_API_KEY) {
-      return { status: 200, body: { action: body.action, result: { carriers: [], market_insight: "AI matching requires HF_API_KEY to be configured in Secrets.", recommended_rate_usd: basePrice, rate_range_low_usd: basePrice, rate_range_high_usd: basePrice, rate_per_km_usd: 0, estimated_distance_km: 0, fuel_cost_estimate_usd: 0, platform_fee_usd: basePrice * 0.1, driver_payout_usd: basePrice * 0.9, price_factors: [], market_comparison: "Configure HF_API_KEY in Secrets for live AI pricing." } } };
+    if (!process.env.GEMINI_API_KEY) {
+      return { status: 200, body: { action: body.action, result: { carriers: [], market_insight: "AI matching requires GEMINI_API_KEY to be configured in Secrets.", recommended_rate_usd: basePrice, rate_range_low_usd: basePrice, rate_range_high_usd: basePrice, rate_per_km_usd: 0, estimated_distance_km: 0, fuel_cost_estimate_usd: 0, platform_fee_usd: basePrice * 0.1, driver_payout_usd: basePrice * 0.9, price_factors: [], market_comparison: "Configure GEMINI_API_KEY in Secrets for live AI pricing." } } };
     }
     try {
-      const userMessage = `Write ONE concise sentence of market insight (max 25 words) for this Zimbabwe freight load. Do not list, just one sentence.\nFrom ${load.pickup_location || "?"} to ${load.delivery_location || "?"}, ${load.weight_lbs ? load.weight_lbs + " lbs" : "weight unknown"}, equipment: ${load.equipment_type || "any"}, asking price: $${basePrice}.`;
-      const insight = (await callHuggingFaceChat([{ role: "user", content: userMessage }], "shipper")).trim();
-      return { status: 200, body: { action: body.action, result: { recommended_rate_usd: basePrice, rate_range_low_usd: Math.round(basePrice * 0.9), rate_range_high_usd: Math.round(basePrice * 1.15), market_insight: insight || "Pricing aligned with current corridor rates.", platform_fee_usd: basePrice * 0.1, driver_payout_usd: basePrice * 0.9 } } };
+      const prompt = `Analyze this Zimbabwe freight load and respond ONLY with valid JSON containing: recommended_rate_usd (number), rate_range_low_usd (number), rate_range_high_usd (number), market_insight (one short sentence string).\nLoad: ${JSON.stringify(load)}`;
+      const resp = await callGeminiChat([{ role: "user", content: prompt }], "shipper", { stream: false });
+      const data = await resp.json();
+      const text = data?.choices?.[0]?.message?.content || "{}";
+      const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+      const rate = Number(parsed.recommended_rate_usd || basePrice);
+      return { status: 200, body: { action: body.action, result: { ...parsed, recommended_rate_usd: rate, platform_fee_usd: rate * 0.1, driver_payout_usd: rate * 0.9 } } };
     } catch {
       return { status: 200, body: { action: body.action, result: { recommended_rate_usd: basePrice, market_insight: "Could not get AI pricing at this time.", platform_fee_usd: basePrice * 0.1, driver_payout_usd: basePrice * 0.9 } } };
     }
