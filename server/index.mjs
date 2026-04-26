@@ -384,46 +384,119 @@ async function handleAuth(pathname, req, res) {
   return send(res, 404, { error: { message: "Not found" } });
 }
 
+const HAULIQ_SYSTEM_PROMPT = `You are Hauliq AI Assistant, a logistics genius built to help shippers and carriers in Zimbabwe.
+Your responsibilities include:
+
+1. Role Awareness:
+   - Detect whether the user is a SHIPPER (posting loads, seeking carriers, estimating prices, writing descriptions).
+   - Detect whether the user is a CARRIER (finding loads, checking equipment fit, asking about routes or pricing).
+   - Tailor responses accordingly.
+
+2. Chatbot:
+   - Answer user questions conversationally about loads, routes, pricing, and logistics.
+
+3. Price Estimator:
+   - Given origin, destination, weight, and load type, estimate freight price realistically.
+
+4. Load Description Helper (AI Write):
+   - When the user is on the Create Shipment sheet and invokes "AI Write," expand short shipment descriptions into detailed, professional postings.
+
+5. Equipment Recommender:
+   - Recommend the best truck or equipment type for the load and explain why.
+
+6. Load Posting & Finding:
+   - Help shippers post loads with clear steps.
+   - Help carriers find loads in specified corridors.
+
+7. ID on Loads:
+   - Generate a unique identifier for each load when requested (format: HAULIQ-<date>-<random number>).
+
+Rules:
+- Always respond in clear, structured text.
+- Adapt tone and detail depending on whether the user is a shipper or carrier.`;
+
+const HF_CHAT_URL = "https://router.huggingface.co/v1/chat/completions";
+const HF_MODEL = "meta-llama/Llama-3.1-8B-Instruct:novita";
+
+async function callHuggingFaceChat(messages, role) {
+  const apiKey = process.env.HF_API_KEY;
+  if (!apiKey) throw new Error("HF_API_KEY is not configured. Add it in Secrets.");
+  const systemContent = role
+    ? `${HAULIQ_SYSTEM_PROMPT}\n\nThe current user role is: ${String(role).toUpperCase()}.`
+    : HAULIQ_SYSTEM_PROMPT;
+  const resp = await fetch(HF_CHAT_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: HF_MODEL,
+      messages: [{ role: "system", content: systemContent }, ...messages],
+      max_tokens: 600,
+      temperature: 0.5
+    })
+  });
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`Hugging Face request failed (${resp.status}): ${errText.slice(0, 200)}`);
+  }
+  const data = await resp.json();
+  return data?.choices?.[0]?.message?.content || "";
+}
+
+function sseChunk(content) {
+  const payload = { choices: [{ delta: { content } }] };
+  return `data: ${JSON.stringify(payload)}\n\n`;
+}
+
 async function handleFunction(name, body) {
   if (name === "ai-chatbot") {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) return { status: 500, body: { error: "GEMINI_API_KEY is not configured. Add it in Secrets." } };
-    const response = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "gemini-2.0-flash",
-        messages: [
-          { role: "system", content: "You are Hauliq AI, a concise logistics assistant for a freight marketplace in Zimbabwe. Help shippers post loads efficiently and help drivers find and bid on loads. Be professional and direct. Format responses with clear line breaks." },
-          ...(body.messages || [])
-        ],
-        stream: true
-      })
-    });
-    return { proxy: response };
+    if (!process.env.HF_API_KEY) {
+      return { status: 500, body: { error: "HF_API_KEY is not configured. Add it in Secrets." } };
+    }
+    try {
+      const role = body.userContext?.role;
+      const messages = (body.messages || []).map(m => ({
+        role: m.role === "assistant" ? "assistant" : "user",
+        content: String(m.content || "")
+      }));
+      const text = await callHuggingFaceChat(messages, role);
+      // Wrap as a single OpenAI-style SSE chunk so the existing frontend streaming parser works.
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(sseChunk(text)));
+          controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
+          controller.close();
+        }
+      });
+      return {
+        proxy: {
+          status: 200,
+          headers: new Map([
+            ["content-type", "text/event-stream"],
+            ["cache-control", "no-cache"],
+            ["connection", "keep-alive"]
+          ]),
+          body: stream
+        }
+      };
+    } catch (err) {
+      return { status: 500, body: { error: err?.message || "Hugging Face request failed" } };
+    }
   }
   if (name === "ai-load-matching") {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) return { status: 200, body: { action: body.action, result: { carriers: [], market_insight: "AI matching requires GEMINI_API_KEY to be configured in Secrets.", recommended_rate_usd: Number(body.load?.price || 0), rate_range_low_usd: Number(body.load?.price || 0), rate_range_high_usd: Number(body.load?.price || 0), rate_per_km_usd: 0, estimated_distance_km: 0, fuel_cost_estimate_usd: 0, platform_fee_usd: Number(body.load?.price || 0) * 0.1, driver_payout_usd: Number(body.load?.price || 0) * 0.9, price_factors: [], market_comparison: "Configure GEMINI_API_KEY in Secrets for live AI pricing." } } };
+    const load = body.load || {};
+    const basePrice = Number(load.price || 0);
+    if (!process.env.HF_API_KEY) {
+      return { status: 200, body: { action: body.action, result: { carriers: [], market_insight: "AI matching requires HF_API_KEY to be configured in Secrets.", recommended_rate_usd: basePrice, rate_range_low_usd: basePrice, rate_range_high_usd: basePrice, rate_per_km_usd: 0, estimated_distance_km: 0, fuel_cost_estimate_usd: 0, platform_fee_usd: basePrice * 0.1, driver_payout_usd: basePrice * 0.9, price_factors: [], market_comparison: "Configure HF_API_KEY in Secrets for live AI pricing." } } };
+    }
     try {
-      const prompt = `You are a freight pricing AI for Zimbabwe logistics. Analyze this load and provide market rate insights in JSON:
-Load: ${JSON.stringify(body.load || {})}
-Respond ONLY with valid JSON containing: recommended_rate_usd, rate_range_low_usd, rate_range_high_usd, market_insight (string, 1 sentence).`;
-      const resp = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "gemini-2.0-flash", messages: [{ role: "user", content: prompt }] })
-      });
-      const data = await resp.json();
-      const text = data.choices?.[0]?.message?.content || "{}";
-      const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-      const parsed = JSON.parse(cleaned);
-      return { status: 200, body: { action: body.action, result: { ...parsed, platform_fee_usd: Number(parsed.recommended_rate_usd || 0) * 0.1, driver_payout_usd: Number(parsed.recommended_rate_usd || 0) * 0.9 } } };
+      const userMessage = `Write ONE concise sentence of market insight (max 25 words) for this Zimbabwe freight load. Do not list, just one sentence.\nFrom ${load.pickup_location || "?"} to ${load.delivery_location || "?"}, ${load.weight_lbs ? load.weight_lbs + " lbs" : "weight unknown"}, equipment: ${load.equipment_type || "any"}, asking price: $${basePrice}.`;
+      const insight = (await callHuggingFaceChat([{ role: "user", content: userMessage }], "shipper")).trim();
+      return { status: 200, body: { action: body.action, result: { recommended_rate_usd: basePrice, rate_range_low_usd: Math.round(basePrice * 0.9), rate_range_high_usd: Math.round(basePrice * 1.15), market_insight: insight || "Pricing aligned with current corridor rates.", platform_fee_usd: basePrice * 0.1, driver_payout_usd: basePrice * 0.9 } } };
     } catch {
-      return { status: 200, body: { action: body.action, result: { recommended_rate_usd: Number(body.load?.price || 0), market_insight: "Could not get AI pricing at this time." } } };
+      return { status: 200, body: { action: body.action, result: { recommended_rate_usd: basePrice, market_insight: "Could not get AI pricing at this time.", platform_fee_usd: basePrice * 0.1, driver_payout_usd: basePrice * 0.9 } } };
     }
   }
   if (name === "verify-document") return { status: 200, body: { success: true, data: { valid: true, face_detected: true, liveness_indicators: "natural" }, status: "manual_review", issues: [], message: "Manual review requested." } };
