@@ -418,6 +418,8 @@ export default function ShipperLiveView() {
                     status={featuredLoad.status}
                     pickupLocation={featuredLoad.pickup_location}
                     deliveryLocation={featuredLoad.delivery_location}
+                    pickupTime={featuredLoad.pickup_time}
+                    deliveryTime={featuredLoad.delivery_time}
                     postedAt={featuredLoad.created_at}
                     price={featuredLoad.price}
                     truckType={featuredLoad.equipment_type}
@@ -439,6 +441,8 @@ export default function ShipperLiveView() {
                       status={load.status}
                       pickupLocation={load.pickup_location}
                       deliveryLocation={load.delivery_location}
+                      pickupTime={load.pickup_time}
+                      deliveryTime={load.delivery_time}
                       postedAt={load.created_at}
                       price={load.price}
                       truckType={load.equipment_type}

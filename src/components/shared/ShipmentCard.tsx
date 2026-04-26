@@ -15,6 +15,10 @@ interface ShipmentCardProps {
   pickupDate?: string | null;
   /** Reserved for future detail view; not rendered on the card. */
   deliveryDate?: string | null;
+  /** "HH:mm" — shown beneath pickup location. */
+  pickupTime?: string | null;
+  /** "HH:mm" — shown beneath delivery location. */
+  deliveryTime?: string | null;
   /** ISO timestamp of when the load was posted — shown as relative time ("2h ago"). */
   postedAt?: string | null;
   price?: number | null;
@@ -43,6 +47,17 @@ const STAGE_PILL: Record<string, { cls: string; label: string }> = {
   cancelled: { cls: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300', label: 'Cancelled' },
 };
 
+function formatTime(t?: string | null) {
+  if (!t) return null;
+  // Accept "HH:mm" or "HH:mm:ss" — render as 12-hour clock
+  const [hh, mm] = t.split(':');
+  const h = Number(hh);
+  if (Number.isNaN(h)) return t;
+  const period = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${mm ?? '00'} ${period}`;
+}
+
 export default function ShipmentCard({
   id,
   status,
@@ -50,6 +65,8 @@ export default function ShipmentCard({
   deliveryLocation,
   postedAt,
   pickupDate,
+  pickupTime,
+  deliveryTime,
   price,
   truckType,
   onClick,
@@ -78,7 +95,7 @@ export default function ShipmentCard({
     >
       {/* Header: ID + status + (bookmark) */}
       <div className="flex items-center justify-between gap-3">
-        <p className="font-display-italic text-[18px] leading-tight text-foreground truncate">
+        <p className="italic font-medium text-[15px] tracking-tight leading-tight text-foreground truncate">
           ID: {id}
         </p>
         <div className="flex items-center gap-2 shrink-0">
@@ -116,12 +133,26 @@ export default function ShipmentCard({
       <div className="mt-4 flex">
         <div className="flex flex-col items-center w-6 shrink-0 pt-1.5">
           <span className="h-2.5 w-2.5 rounded-full bg-primary ring-[3px] ring-primary/20" />
-          <span className="flex-1 my-1 border-l-2 border-dotted border-muted-foreground/40 min-h-[28px] w-px" />
+          <span className="flex-1 my-1 border-l-2 border-dotted border-muted-foreground/40 min-h-[36px] w-px" />
           <span className="h-2.5 w-2.5 rounded-full bg-card border-2 border-foreground" />
         </div>
-        <div className="flex-1 flex flex-col justify-between min-w-0 gap-3 pl-1">
-          <p className="text-[14px] font-semibold text-foreground truncate">{pickupLocation}</p>
-          <p className="text-[14px] font-semibold text-foreground truncate">{deliveryLocation}</p>
+        <div className="flex-1 flex flex-col justify-between min-w-0 gap-4 pl-1">
+          <div className="min-w-0">
+            <p className="text-[14px] font-semibold text-foreground truncate">{pickupLocation}</p>
+            {formatTime(pickupTime) && (
+              <p className="text-[11.5px] text-muted-foreground mt-0.5 tabular-nums">
+                {formatTime(pickupTime)}
+              </p>
+            )}
+          </div>
+          <div className="min-w-0">
+            <p className="text-[14px] font-semibold text-foreground truncate">{deliveryLocation}</p>
+            {formatTime(deliveryTime) && (
+              <p className="text-[11.5px] text-muted-foreground mt-0.5 tabular-nums">
+                {formatTime(deliveryTime)}
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
@@ -129,7 +160,7 @@ export default function ShipmentCard({
       <div className="mt-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 flex-wrap min-w-0">
           {price != null && price > 0 && (
-            <span className="font-display text-[18px] leading-none text-foreground">
+            <span className="font-sans font-extrabold text-[18px] leading-none tracking-tight text-foreground tabular-nums">
               ${Number(price).toLocaleString()}
             </span>
           )}

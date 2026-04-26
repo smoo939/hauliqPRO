@@ -9,6 +9,8 @@ export interface LoadDraft {
   delivery_location: string;
   pickup_date: string;
   pickup_time: string;
+  delivery_date: string;
+  delivery_time: string;
   price: string;
   weight_lbs: string;
   equipment_type: string;
@@ -24,6 +26,8 @@ const emptyDraft: LoadDraft = {
   delivery_location: '',
   pickup_date: '',
   pickup_time: '',
+  delivery_date: '',
+  delivery_time: '',
   price: '',
   weight_lbs: '',
   equipment_type: '',

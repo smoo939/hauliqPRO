@@ -50,6 +50,8 @@ export default function ShipperCreateLoad() {
         weight_lbs: form.weight_lbs ? parseFloat(form.weight_lbs) : null,
         equipment_type: form.equipment_type || null, load_type: form.load_type, payment_method: form.payment_method,
         urgent: form.urgent || false, pickup_time: form.pickup_time || null,
+        delivery_date: form.delivery_date ? new Date(form.delivery_date).toISOString() : null,
+        delivery_time: form.delivery_time || null,
       } as any);
       if (error) throw error;
     },
@@ -258,6 +260,16 @@ export default function ShipperCreateLoad() {
               <div className="space-y-1">
                 <Label className="text-xs" htmlFor="pickup_time">Pickup Time</Label>
                 <Input id="pickup_time" type="time" value={draft.pickup_time || ''} onChange={(e) => updateField('pickup_time', e.target.value)} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs" htmlFor="delivery_date">Delivery Date</Label>
+                <Input id="delivery_date" type="date" value={draft.delivery_date || ''} onChange={(e) => updateField('delivery_date', e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs" htmlFor="delivery_time">Delivery Time</Label>
+                <Input id="delivery_time" type="time" value={draft.delivery_time || ''} onChange={(e) => updateField('delivery_time', e.target.value)} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">

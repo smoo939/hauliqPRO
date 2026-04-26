@@ -16,7 +16,7 @@ const pool = process.env.DATABASE_URL ? new Pool({ connectionString: process.env
 const tables = {
   profiles: ["id", "user_id", "full_name", "phone", "role", "avatar_url", "verified", "created_at", "updated_at"],
   user_roles: ["id", "user_id", "role", "created_at"],
-  loads: ["id", "shipper_id", "driver_id", "title", "description", "pickup_location", "delivery_location", "pickup_date", "pickup_time", "price", "platform_fee", "weight_lbs", "equipment_type", "load_type", "payment_method", "status", "tracking_code", "urgent", "accepted_at", "completed_at", "cancellation_reason", "cancelled_by", "created_at", "updated_at"],
+  loads: ["id", "shipper_id", "driver_id", "title", "description", "pickup_location", "delivery_location", "pickup_date", "pickup_time", "delivery_date", "delivery_time", "price", "platform_fee", "weight_lbs", "equipment_type", "load_type", "payment_method", "status", "tracking_code", "urgent", "accepted_at", "completed_at", "cancellation_reason", "cancelled_by", "created_at", "updated_at"],
   bids: ["id", "load_id", "driver_id", "amount", "message", "note", "eta", "status", "created_at", "updated_at"],
   messages: ["id", "load_id", "sender_id", "content", "created_at"],
   reviews: ["id", "load_id", "reviewer_id", "reviewed_id", "rating", "comment", "created_at"],
@@ -230,6 +230,8 @@ async function migrate() {
   const safeAlter = async (sql) => { try { await pool.query(sql); } catch {} };
   await safeAlter(`ALTER TABLE loads ADD COLUMN IF NOT EXISTS cancellation_reason text`);
   await safeAlter(`ALTER TABLE loads ADD COLUMN IF NOT EXISTS cancelled_by text`);
+  await safeAlter(`ALTER TABLE loads ADD COLUMN IF NOT EXISTS delivery_date timestamptz`);
+  await safeAlter(`ALTER TABLE loads ADD COLUMN IF NOT EXISTS delivery_time text`);
   await safeAlter(`ALTER TABLE bids ADD COLUMN IF NOT EXISTS eta text`);
   await safeAlter(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS company_name text`);
 }
