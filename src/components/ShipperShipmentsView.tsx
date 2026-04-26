@@ -239,6 +239,8 @@ export default function ShipperShipmentsView() {
                     status={load.status}
                     pickupLocation={load.pickup_location}
                     deliveryLocation={load.delivery_location}
+                    pickupDate={load.pickup_date}
+                    deliveryDate={load.delivery_date}
                     pickupTime={load.pickup_time}
                     deliveryTime={load.delivery_time}
                     postedAt={load.created_at}
