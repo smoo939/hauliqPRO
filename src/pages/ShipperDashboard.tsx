@@ -28,7 +28,7 @@ function PageWrapper({ title, children }: { title: string; children: React.React
       <header className="sticky top-0 z-40 border-b border-border bg-card/90 backdrop-blur-md">
         <div className="px-4 flex h-14 items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <HauliqLogo variant="light" size={20} />
+            <HauliqLogo variant="light" size={26} />
           </div>
           <h1 className="text-base font-black leading-tight">{title}</h1>
         </div>

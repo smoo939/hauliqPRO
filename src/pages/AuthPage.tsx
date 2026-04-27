@@ -119,9 +119,9 @@ export default function AuthPage() {
       >
         <div className="mb-8 text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary glow-amber">
-            <HauliqLogo variant="light" size={36} />
+            <HauliqLogo variant="light" size={52} />
           </div>
-          <h1 className="text-3xl font-black tracking-tight text-foreground">Hauliq</h1>
+          <h1 className="font-brand text-3xl text-foreground">HAULIQ</h1>
         </div>
 
         <Card className="bg-card shadow-float">

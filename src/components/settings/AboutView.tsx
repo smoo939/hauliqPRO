@@ -9,9 +9,9 @@ export default function AboutView({ onBack }: { onBack?: () => void }) {
       <Card>
         <CardContent className="p-8 flex flex-col items-center text-center">
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary">
-            <HauliqLogo variant="light" size={36} />
+            <HauliqLogo variant="light" size={52} />
           </div>
-          <h2 className="text-xl font-black">Hauliq</h2>
+          <h2 className="font-brand text-xl">HAULIQ</h2>
           <p className="text-sm text-muted-foreground mt-1">Local-first freight marketplace</p>
           <p className="text-xs text-muted-foreground mt-4">Version 1.0.0</p>
           <p className="text-xs text-muted-foreground mt-1">© 2026 Hauliq. All rights reserved.</p>
