@@ -1,5 +1,6 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Truck } from 'lucide-react';
+import HauliqLogo from '@/components/shared/HauliqLogo';
 
 export default function AboutView({ onBack }: { onBack?: () => void }) {
   return (
@@ -8,7 +9,7 @@ export default function AboutView({ onBack }: { onBack?: () => void }) {
       <Card>
         <CardContent className="p-8 flex flex-col items-center text-center">
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary">
-            <Truck className="h-8 w-8 text-primary-foreground" />
+            <HauliqLogo variant="light" size={36} />
           </div>
           <h2 className="text-xl font-black">Hauliq</h2>
           <p className="text-sm text-muted-foreground mt-1">Local-first freight marketplace</p>

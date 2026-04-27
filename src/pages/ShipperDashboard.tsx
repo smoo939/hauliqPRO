@@ -1,6 +1,7 @@
 import { useAuth } from '@/hooks/useAuth';
 import { Routes, Route } from 'react-router-dom';
 import { Package, FileText } from 'lucide-react';
+import HauliqLogo from '@/components/shared/HauliqLogo';
 import BottomTabs from '@/components/BottomTabs';
 import ShipperLiveView from '@/components/ShipperLiveView';
 import ShipperCreateLoad from '@/components/ShipperCreateLoad';
@@ -27,7 +28,7 @@ function PageWrapper({ title, children }: { title: string; children: React.React
       <header className="sticky top-0 z-40 border-b border-border bg-card/90 backdrop-blur-md">
         <div className="px-4 flex h-14 items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <Package className="h-4 w-4 text-primary-foreground" />
+            <HauliqLogo variant="light" size={20} />
           </div>
           <h1 className="text-base font-black leading-tight">{title}</h1>
         </div>

@@ -18,6 +18,7 @@ import AboutView from '@/components/settings/AboutView';
 import SubPageWrapper from '@/components/settings/SubPageWrapper';
 import { useLoadNotifications } from '@/hooks/useLoadNotifications';
 import { Truck } from 'lucide-react';
+import HauliqLogo from '@/components/shared/HauliqLogo';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -28,7 +29,7 @@ function PageWrapper({ title, children }: { title: string; children: React.React
       <header className="sticky top-0 z-40 border-b border-border bg-card/90 backdrop-blur-md">
         <div className="px-4 flex h-14 items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <Truck className="h-4 w-4 text-primary-foreground" />
+            <HauliqLogo variant="light" size={20} />
           </div>
           <h1 className="text-base font-black leading-tight">{title}</h1>
         </div>

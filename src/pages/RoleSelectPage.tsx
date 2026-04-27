@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Truck, Package } from 'lucide-react';
 import { motion } from 'framer-motion';
+import HauliqLogo from '@/components/shared/HauliqLogo';
 import { toast } from 'sonner';
 import { useState } from 'react';
 
@@ -56,7 +57,7 @@ export default function RoleSelectPage() {
           >
             <CardContent className="flex flex-col items-center gap-3 pt-8 pb-6 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary glow-amber">
-                <Package className="h-7 w-7 text-primary-foreground" strokeWidth={1.8} />
+                <HauliqLogo variant="light" size={32} />
               </div>
               <h2 className="text-lg font-bold tracking-tight">Shipper</h2>
               <p className="text-sm text-muted-foreground">Post loads and find reliable carriers to move your freight</p>
@@ -68,7 +69,7 @@ export default function RoleSelectPage() {
           >
             <CardContent className="flex flex-col items-center gap-3 pt-8 pb-6 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary glow-amber">
-                <Truck className="h-7 w-7 text-primary-foreground" strokeWidth={1.8} />
+                <HauliqLogo variant="light" size={32} />
               </div>
               <h2 className="text-lg font-bold tracking-tight">Carrier</h2>
               <p className="text-sm text-muted-foreground">Browse available loads and accept shipments that fit your route</p>

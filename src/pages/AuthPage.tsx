@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { LogIn, UserPlus, Eye, EyeOff, Truck, Package, ArrowLeft, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
+import HauliqLogo from '@/components/shared/HauliqLogo';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const TRUCK_TYPES = [
@@ -118,7 +119,7 @@ export default function AuthPage() {
       >
         <div className="mb-8 text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary glow-amber">
-            <Truck className="h-8 w-8 text-primary-foreground" />
+            <HauliqLogo variant="light" size={36} />
           </div>
           <h1 className="text-3xl font-black tracking-tight text-foreground">Hauliq</h1>
         </div>
