@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
+import { GoogleGenAI } from "@google/genai";
 
 const { Pool } = pg;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -447,8 +448,23 @@ You assist shippers and carriers by auto-filling, expanding, recommending, calcu
 - Never ask redundant questions if data is already available.
 - Provide actionable suggestions, not vague commentary.`;
 
-const GEMINI_CHAT_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 const GEMINI_MODEL = "gemini-2.5-flash";
+
+function isGeminiConfigured() {
+  return Boolean(process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY);
+}
+
+function getGeminiClient() {
+  const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+  const baseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL;
+  if (baseUrl) {
+    return new GoogleGenAI({
+      apiKey,
+      httpOptions: { apiVersion: "", baseUrl }
+    });
+  }
+  return new GoogleGenAI({ apiKey });
+}
 
 function buildSystemContent(role) {
   return role
@@ -456,28 +472,42 @@ function buildSystemContent(role) {
     : HAULIQ_SYSTEM_PROMPT;
 }
 
-async function callGeminiChat(messages, role, { stream = false } = {}) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY is not configured. Add it in Secrets.");
-  const resp = await fetch(GEMINI_CHAT_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: GEMINI_MODEL,
-      messages: [{ role: "system", content: buildSystemContent(role) }, ...messages],
-      stream
-    })
+function toGeminiContents(messages) {
+  return messages.map((m) => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: String(m.content || "") }]
+  }));
+}
+
+async function generateGeminiText(messages, role) {
+  const ai = getGeminiClient();
+  const response = await ai.models.generateContent({
+    model: GEMINI_MODEL,
+    contents: toGeminiContents(messages),
+    config: {
+      systemInstruction: buildSystemContent(role),
+      maxOutputTokens: 8192
+    }
   });
-  return resp;
+  return response.text || "";
+}
+
+async function streamGeminiText(messages, role) {
+  const ai = getGeminiClient();
+  return ai.models.generateContentStream({
+    model: GEMINI_MODEL,
+    contents: toGeminiContents(messages),
+    config: {
+      systemInstruction: buildSystemContent(role),
+      maxOutputTokens: 8192
+    }
+  });
 }
 
 async function handleFunction(name, body) {
   if (name === "ai-chatbot") {
-    if (!process.env.GEMINI_API_KEY) {
-      return { status: 500, body: { error: "GEMINI_API_KEY is not configured. Add it in Secrets." } };
+    if (!isGeminiConfigured()) {
+      return { status: 500, body: { error: "Gemini AI is not configured." } };
     }
     try {
       const role = body.userContext?.role;
@@ -485,12 +515,8 @@ async function handleFunction(name, body) {
         role: m.role === "assistant" ? "assistant" : "user",
         content: String(m.content || "")
       }));
-      const resp = await callGeminiChat(messages, role, { stream: true });
-      if (!resp.ok) {
-        const errText = await resp.text();
-        return { status: resp.status, body: { error: `Gemini request failed: ${errText.slice(0, 200)}` } };
-      }
-      return { proxy: resp };
+      const stream = await streamGeminiText(messages, role);
+      return { stream };
     } catch (err) {
       return { status: 500, body: { error: err?.message || "Gemini request failed" } };
     }
@@ -498,14 +524,12 @@ async function handleFunction(name, body) {
   if (name === "ai-load-matching") {
     const load = body.load || {};
     const basePrice = Number(load.price || 0);
-    if (!process.env.GEMINI_API_KEY) {
-      return { status: 200, body: { action: body.action, result: { carriers: [], market_insight: "AI matching requires GEMINI_API_KEY to be configured in Secrets.", recommended_rate_usd: basePrice, rate_range_low_usd: basePrice, rate_range_high_usd: basePrice, rate_per_km_usd: 0, estimated_distance_km: 0, fuel_cost_estimate_usd: 0, platform_fee_usd: basePrice * 0.1, driver_payout_usd: basePrice * 0.9, price_factors: [], market_comparison: "Configure GEMINI_API_KEY in Secrets for live AI pricing." } } };
+    if (!isGeminiConfigured()) {
+      return { status: 200, body: { action: body.action, result: { carriers: [], market_insight: "AI matching is not configured.", recommended_rate_usd: basePrice, rate_range_low_usd: basePrice, rate_range_high_usd: basePrice, rate_per_km_usd: 0, estimated_distance_km: 0, fuel_cost_estimate_usd: 0, platform_fee_usd: basePrice * 0.1, driver_payout_usd: basePrice * 0.9, price_factors: [], market_comparison: "AI pricing is not configured." } } };
     }
     try {
       const prompt = `Analyze this Zimbabwe freight load and respond ONLY with valid JSON containing: recommended_rate_usd (number), rate_range_low_usd (number), rate_range_high_usd (number), market_insight (one short sentence string).\nLoad: ${JSON.stringify(load)}`;
-      const resp = await callGeminiChat([{ role: "user", content: prompt }], "shipper", { stream: false });
-      const data = await resp.json();
-      const text = data?.choices?.[0]?.message?.content || "{}";
+      const text = await generateGeminiText([{ role: "user", content: prompt }], "shipper");
       const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
       const parsed = JSON.parse(cleaned);
       const rate = Number(parsed.recommended_rate_usd || basePrice);
@@ -570,9 +594,24 @@ async function main() {
       if (req.method === "POST" && url.pathname === "/api/storage/upload") return handleUpload(req, res);
       if (req.method === "POST" && url.pathname.startsWith("/api/functions/")) {
         const result = await handleFunction(url.pathname.split("/").pop(), await readJson(req));
-        if (result.proxy) {
-          res.writeHead(result.proxy.status, Object.fromEntries(result.proxy.headers.entries()));
-          if (result.proxy.body) for await (const chunk of result.proxy.body) res.write(chunk);
+        if (result.stream) {
+          res.writeHead(200, {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive"
+          });
+          try {
+            for await (const chunk of result.stream) {
+              const text = chunk?.text || "";
+              if (!text) continue;
+              const payload = { choices: [{ delta: { content: text } }] };
+              res.write(`data: ${JSON.stringify(payload)}\n\n`);
+            }
+            res.write("data: [DONE]\n\n");
+          } catch (err) {
+            const errPayload = { error: err?.message || "Stream error" };
+            res.write(`data: ${JSON.stringify(errPayload)}\n\n`);
+          }
           return res.end();
         }
         return send(res, result.status, result.body);

@@ -18,7 +18,7 @@ Hauliq is a logistics/freight marketplace for Zimbabwe built with React + TypeSc
 - Local device tables/stores include `available_loads`, `pending_bids`, and `sync_meta`.
 
 ## External Services
-- AI chatbot requests are routed through `/api/functions/ai-chatbot` and use `GEMINI_API_KEY` from server environment.
+- AI chatbot requests are routed through `/api/functions/ai-chatbot` and use Replit's Gemini AI integration (`AI_INTEGRATIONS_GEMINI_*` env vars are auto-provisioned). Falls back to `GEMINI_API_KEY` if set.
 - PostHog telemetry initialized in `src/lib/posthog.ts` using `VITE_POSTHOG_KEY` from environment.
 - Maps use LocationIQ tiles (pk.79ff1b13183afa6fe0469c3585a467c6) — dark tiles in dark mode, light tiles in light mode via DynamicTileLayer.tsx + useTheme hook.
 
