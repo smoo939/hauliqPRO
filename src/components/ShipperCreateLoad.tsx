@@ -84,36 +84,58 @@ export default function ShipperCreateLoad() {
     }
     setAiDescLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('ai-chatbot', {
-        body: {
-          messages: [
-            {
-              role: 'user',
-              content: `Write a short, professional freight load description (2-3 sentences max) for: Title: "${draft.title}", Route: ${draft.pickup_location} to ${draft.delivery_location}, Weight: ${draft.weight_lbs || 'not specified'} kg, Equipment: ${draft.equipment_type || 'general'}. Be concise and professional. No markdown.`,
-            },
-          ],
+      const userPrompt = `Write a short, professional freight load description (2-3 sentences max) for: Title: "${draft.title}", Route: ${draft.pickup_location} to ${draft.delivery_location}, Weight: ${draft.weight_lbs || 'not specified'} kg, Equipment: ${draft.equipment_type || 'general'}. Be concise and professional. No markdown.`;
+      const resp = await fetch('/api/functions/ai-chatbot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: userPrompt }],
           userContext: { role: 'shipper' },
-        },
+        }),
       });
 
-      // Handle streaming or direct response
-      if (typeof data === 'string') {
-        // Parse SSE response
-        const lines = data.split('\n');
-        let content = '';
-        for (const line of lines) {
-          if (line.startsWith('data: ') && line !== 'data: [DONE]') {
-            try {
-              const parsed = JSON.parse(line.slice(6));
-              const c = parsed.choices?.[0]?.delta?.content;
-              if (c) content += c;
-            } catch {}
+      if (!resp.ok || !resp.body) {
+        toast.error('AI generation failed');
+        return;
+      }
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let content = '';
+      let firstChunkApplied = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let nl: number;
+        while ((nl = buffer.indexOf('\n')) !== -1) {
+          let line = buffer.slice(0, nl);
+          buffer = buffer.slice(nl + 1);
+          if (line.endsWith('\r')) line = line.slice(0, -1);
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.slice(6).trim();
+          if (payload === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(payload);
+            const delta = parsed?.choices?.[0]?.delta?.content;
+            if (typeof delta === 'string' && delta) {
+              content += delta;
+              // live-update so the user sees streaming text
+              updateField('description', content.trim());
+              firstChunkApplied = true;
+            } else if (parsed?.error) {
+              toast.error(parsed.error);
+            }
+          } catch {
+            // ignore partial JSON
           }
         }
-        if (content) updateField('description', content.trim());
-        else toast.error('Failed to generate description');
-      } else if (data?.choices?.[0]?.message?.content) {
-        updateField('description', data.choices[0].message.content.trim());
+      }
+
+      if (!firstChunkApplied) {
+        toast.error('Failed to generate description');
       }
     } catch (err: any) {
       toast.error('AI generation failed');
