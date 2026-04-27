@@ -416,7 +416,7 @@ Rules:
 - Adapt tone and detail depending on whether the user is a shipper or carrier.`;
 
 const GEMINI_CHAT_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
-const GEMINI_MODEL = "gemini-2.0-flash";
+const GEMINI_MODEL = "gemini-2.5-flash";
 
 function buildSystemContent(role) {
   return role
