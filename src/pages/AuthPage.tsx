@@ -126,6 +126,13 @@ export default function AuthPage() {
       setEmail(savedEmail);
       setRememberMe(true);
     }
+    // Show error from Google OAuth callback if present in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const googleError = urlParams.get('google_error');
+    if (googleError) {
+      toast.error(`Google sign-in failed: ${googleError}`);
+      window.history.replaceState({}, document.title, '/auth');
+    }
   }, []);
 
   if (user) return <Navigate to="/" replace />;
@@ -360,7 +367,7 @@ export default function AuthPage() {
 
                 <button
                   type="button"
-                  onClick={comingSoon('Google sign-in')}
+                  onClick={() => { window.location.href = '/api/auth/google?role=shipper'; }}
                   className="w-full flex items-center justify-center gap-2 rounded-2xl bg-secondary py-3 text-sm font-bold shadow-soft hover:bg-muted transition-colors"
                 >
                   <GoogleMark /> Continue with Google

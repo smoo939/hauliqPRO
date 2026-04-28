@@ -242,6 +242,149 @@ async function migrate() {
   await safeAlter(`ALTER TABLE loads ADD COLUMN IF NOT EXISTS driver_location_updated_at timestamptz`);
   await safeAlter(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS city text`);
   await safeAlter(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS country text`);
+  await safeAlter(`ALTER TABLE app_users ALTER COLUMN password_hash DROP NOT NULL`);
+  await safeAlter(`ALTER TABLE app_users ADD COLUMN IF NOT EXISTS provider text`);
+  await safeAlter(`ALTER TABLE app_users ADD COLUMN IF NOT EXISTS provider_id text`);
+}
+
+function googleRedirectUri(req) {
+  const proto = (req.headers["x-forwarded-proto"] || "https").toString().split(",")[0].trim();
+  const host = req.headers["x-forwarded-host"] || req.headers.host;
+  return `${proto}://${host}/api/auth/google/callback`;
+}
+
+async function handleGoogleStart(req, res) {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  if (!clientId) {
+    return send(res, 500, { error: { message: "Google sign-in is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET." } });
+  }
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const role = (url.searchParams.get("role") || "shipper").toLowerCase();
+  const safeRole = role === "driver" ? "driver" : "shipper";
+  const state = `${randomUUID()}|${safeRole}`;
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: googleRedirectUri(req),
+    response_type: "code",
+    scope: "openid email profile",
+    access_type: "online",
+    include_granted_scopes: "true",
+    prompt: "select_account",
+    state,
+  });
+
+  res.writeHead(302, {
+    Location: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`,
+    "Set-Cookie": `oauth_state=${encodeURIComponent(state)}; Path=/; Max-Age=600; HttpOnly; SameSite=Lax`,
+  });
+  res.end();
+}
+
+async function handleGoogleCallback(req, res) {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    return redirectToAuthError(res, "Google sign-in is not configured");
+  }
+  if (!pool) return redirectToAuthError(res, "Database is not configured");
+
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const code = url.searchParams.get("code");
+  const stateParam = url.searchParams.get("state") || "";
+  const error = url.searchParams.get("error");
+  if (error) return redirectToAuthError(res, error);
+  if (!code) return redirectToAuthError(res, "Missing authorization code");
+
+  // CSRF check via cookie state
+  const cookieHeader = req.headers.cookie || "";
+  const cookieState = cookieHeader
+    .split(";")
+    .map((c) => c.trim())
+    .find((c) => c.startsWith("oauth_state="));
+  const expectedState = cookieState ? decodeURIComponent(cookieState.split("=")[1] || "") : "";
+  if (!expectedState || expectedState !== stateParam) {
+    return redirectToAuthError(res, "Invalid OAuth state — please try again");
+  }
+  const role = (stateParam.split("|")[1] || "shipper").toLowerCase();
+  const safeRole = role === "driver" ? "driver" : "shipper";
+
+  try {
+    // 1. Exchange code for token
+    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: googleRedirectUri(req),
+        grant_type: "authorization_code",
+      }),
+    });
+    const tokenJson = await tokenRes.json();
+    if (!tokenRes.ok) {
+      return redirectToAuthError(res, tokenJson.error_description || tokenJson.error || "Google token exchange failed");
+    }
+
+    // 2. Fetch userinfo
+    const infoRes = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
+      headers: { Authorization: `Bearer ${tokenJson.access_token}` },
+    });
+    const info = await infoRes.json();
+    if (!infoRes.ok || !info.email) {
+      return redirectToAuthError(res, "Could not fetch Google profile");
+    }
+    const email = String(info.email).toLowerCase();
+    const fullName = info.name || (email.split("@")[0]);
+    const avatar = info.picture || null;
+    const googleSub = String(info.sub || "");
+
+    // 3. Upsert user
+    const existing = await pool.query("SELECT * FROM app_users WHERE email = $1", [email]);
+    let user;
+    if (existing.rows[0]) {
+      user = existing.rows[0];
+      await pool.query(
+        "UPDATE app_users SET provider = COALESCE(provider, $1), provider_id = COALESCE(provider_id, $2), updated_at = now() WHERE id = $3",
+        ["google", googleSub, user.id]
+      );
+    } else {
+      const id = randomUUID();
+      const insert = await pool.query(
+        "INSERT INTO app_users (id, email, password_hash, user_metadata, provider, provider_id) VALUES ($1, $2, NULL, $3, 'google', $4) RETURNING *",
+        [id, email, { full_name: fullName, avatar_url: avatar }, googleSub]
+      );
+      user = insert.rows[0];
+      await pool.query(
+        "INSERT INTO profiles (user_id, full_name, avatar_url, role) VALUES ($1, $2, $3, $4) ON CONFLICT (user_id) DO NOTHING",
+        [id, fullName, avatar, safeRole]
+      );
+    }
+
+    // 4. Mint a fresh session token (server is stateless w.r.t. tokens — same as email login)
+    const session = createSession(user);
+
+    // 5. Clear the state cookie and bounce to the SPA callback page with token in URL hash
+    const hashParams = new URLSearchParams({
+      token: session.access_token,
+      user_id: user.id,
+      email: user.email,
+      name: fullName,
+    });
+    res.writeHead(302, {
+      Location: `/auth/callback#${hashParams.toString()}`,
+      "Set-Cookie": "oauth_state=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax",
+    });
+    res.end();
+  } catch (err) {
+    return redirectToAuthError(res, err.message || "Google sign-in failed");
+  }
+}
+
+function redirectToAuthError(res, message) {
+  res.writeHead(302, { Location: `/auth?google_error=${encodeURIComponent(message)}` });
+  res.end();
 }
 
 async function handleDriverLocation(req, res) {
@@ -649,6 +792,8 @@ async function main() {
     try {
       const url = new URL(req.url || "/", `http://${req.headers.host}`);
       if (req.method === "POST" && url.pathname === "/api/db/query") return send(res, 200, await handleDbQuery(await readJson(req)));
+      if (req.method === "GET" && url.pathname === "/api/auth/google") return handleGoogleStart(req, res);
+      if (req.method === "GET" && url.pathname === "/api/auth/google/callback") return handleGoogleCallback(req, res);
       if (req.method === "POST" && url.pathname.startsWith("/api/auth/")) return handleAuth(url.pathname, req, res);
       if (req.method === "POST" && url.pathname === "/api/storage/upload") return handleUpload(req, res);
       if (req.method === "POST" && url.pathname === "/api/driver/location") return handleDriverLocation(req, res);

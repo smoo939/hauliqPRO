@@ -7,6 +7,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/hooks/useTheme";
 import Index from "./pages/Index";
 import AuthPage from "./pages/AuthPage";
+import AuthCallback from "./pages/AuthCallback";
 import RoleSelectPage from "./pages/RoleSelectPage";
 import ShipperDashboard from "./pages/ShipperDashboard";
 import DriverDashboard from "./pages/DriverDashboard";
@@ -33,6 +34,7 @@ const App = () => (
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/auth" element={<AuthPage />} />
+                <Route path="/auth/callback" element={<AuthCallback />} />
                 <Route path="/privacy" element={<PrivacyPolicy />} />
                 <Route path="/terms" element={<TermsPage />} />
                 <Route path="/role-select" element={<RoleSelectPage />} />
