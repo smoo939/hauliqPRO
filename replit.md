@@ -74,6 +74,18 @@ Hauliq is a logistics/freight marketplace for Zimbabwe built with React + TypeSc
 - **Auth/Onboarding**: `AuthPage` card uses `shadow-float`, role toggles are rounded-2xl pills with amber ring when selected. `RoleSelectPage` cards lose heavy borders, gain amber-glow icon tiles.
 - **Theme**: Light is the default theme (`useTheme` defaults to 'light'); dark mode is a soft premium dark (not industrial).
 
+### Phase 6 — AI matching, live GPS, carriers browse, telemetry
+- **Tonnes/kg toggle**: `ShipperCreateLoad` weight field has a kg/tonnes toggle pill. Internally always stored as kg (`weight_lbs` column reused). Truck recommendation re-fires on weight change.
+- **AI truck recommendation**: `recommendTruck(kgWeight, description)` heuristic suggests truck type while shipper types; rendered as inline pill below weight field.
+- **Apple sign-in removed**: `AuthPage` now has a single full-width Google button. Google still routes through `comingSoon('Google sign-in')` toast — needs Google OAuth credentials wired (free tier blocker).
+- **Live driver GPS tracking**: HTTP-based publish/poll model (replaces broken Supabase Realtime).
+  - Server: `loads` table got `driver_lat`, `driver_lng`, `driver_speed`, `driver_heading`, `driver_location_updated_at` columns; `profiles` got `city`, `country`. New endpoints: `POST /api/driver/location` (driver publishes), `GET /api/loads/:id/tracking` (shipper/anyone polls).
+  - Driver: `useDriverTracking(activeLoadId, driverId)` hook uses `navigator.geolocation.watchPosition` + 8s heartbeat to POST coords. Wired into `DriverActiveView` for the first in-transit/picked-up/accepted active load.
+  - Shipper: `LiveTrackingMap` polls the tracking endpoint every 5s and animates the amber trail.
+- **Browse Carriers (shipper)**: New `ShipperCarriersView` at route `/shipper/carriers`, linked from sidebar. Filter sheet: truck-type chips (12 types), verified-only toggle, distance-radius slider (uses `navigator.geolocation` for shipper position; haversine to geocoded carrier city via Nominatim). Shows avatar, verified badge, truck label, city + distance, rating, completed-trips count.
+- **Map zoom-to-content**: `ShipperLiveView` `FitBounds` now centers on user's geolocation (city zoom 12) when no shipments yet, instead of country centroid. Final fallback is Harare, not the country centroid.
+- **PostHog wiring**: `useAuth` calls `identifyUser(id, {email})` on session restore + auth change; emits `signed_in` / `signed_up` events; `resetTracking()` on signOut. `ShipperCreateLoad` emits `load_posted` with truck/weight/budget metadata on success. PostHog still requires `VITE_POSTHOG_KEY` env var to actually send events.
+
 ### Phase 5 — Auth redesign + Privacy & Consent
 - **AuthPage redesign**: iOS pill-card aesthetic. Login has Email/Phone toggle pills, leading-icon inputs, Remember me + Forgot Password row, Log In button, "Or Continue With" with Google/Apple placeholder buttons. Signup field order: Full Name → Email → Phone → Country/City (replaced "State" with "City", country-filtered city list) → Home Address → New Password → Confirm Password → Role pills → Terms checkbox.
 - **H logo enlargement**: AuthPage tile is now `h-20 w-20 rounded-3xl` with logo `size={72}`; RoleSelectPage tiles are `h-16 w-16` with logo `size={56}`.

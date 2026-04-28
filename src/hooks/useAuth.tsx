@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { identifyUser, resetTracking, trackEvent } from '@/lib/posthog';
 
 type User = {
   id: string;
@@ -63,6 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
+          identifyUser(session.user.id, { email: session.user.email });
           setTimeout(() => fetchProfile(session.user.id), 0);
         } else {
           setProfile(null);
@@ -75,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
+        identifyUser(session.user.id, { email: session.user.email });
         fetchProfile(session.user.id);
       }
       setLoading(false);
@@ -93,16 +96,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     });
     if (error) throw error;
+    trackEvent('signed_up', { role: extraData?.role || 'shipper' });
   };
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
+    trackEvent('signed_in');
   };
 
   const signOut = async () => {
     await supabase.auth.signOut();
     setProfile(null);
+    resetTracking();
   };
 
   const setRole = async (role: 'shipper' | 'driver') => {

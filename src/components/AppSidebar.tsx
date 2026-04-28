@@ -122,6 +122,7 @@ export default function AppSidebar({ role }: AppSidebarProps) {
 
   const shipperItems = [
     { icon: User, label: 'Profile', path: `${base}/profile` },
+    { icon: Truck, label: 'Browse Carriers', path: `${base}/carriers` },
     { icon: Package, label: 'Shipping Preferences', path: `${base}/shipping-prefs` },
     { icon: FileText, label: 'Documents', path: `${base}/documents` },
     { icon: Star, label: 'Shipper Ratings', path: `${base}/ratings` },

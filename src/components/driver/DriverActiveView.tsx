@@ -1,5 +1,6 @@
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { useDriverTracking } from '@/hooks/useDriverTracking';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -116,6 +117,10 @@ export default function DriverActiveView() {
   });
 
   const finalCancelReason = cancelReason === 'Other' ? cancelCustom : cancelReason;
+
+  // Live GPS tracking — publish for the most recent active in-transit / picked-up load
+  const trackingLoad = activeLoads?.find((l: any) => ['in_transit', 'picked_up', 'accepted'].includes(l.status));
+  useDriverTracking(trackingLoad?.id ?? null, user?.id ?? null);
 
   return (
     <div className="px-4 py-4 pb-24 space-y-4">

@@ -358,22 +358,13 @@ export default function AuthPage() {
                   <div className="relative flex justify-center"><span className="bg-card px-3 text-xs font-semibold text-muted-foreground">Or Continue With</span></div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={comingSoon('Google sign-in')}
-                    className="flex items-center justify-center gap-2 rounded-2xl bg-secondary py-3 text-sm font-bold shadow-soft hover:bg-muted transition-colors"
-                  >
-                    <GoogleMark /> Google
-                  </button>
-                  <button
-                    type="button"
-                    onClick={comingSoon('Apple sign-in')}
-                    className="flex items-center justify-center gap-2 rounded-2xl bg-secondary py-3 text-sm font-bold shadow-soft hover:bg-muted transition-colors"
-                  >
-                    <AppleMark /> Apple
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={comingSoon('Google sign-in')}
+                  className="w-full flex items-center justify-center gap-2 rounded-2xl bg-secondary py-3 text-sm font-bold shadow-soft hover:bg-muted transition-colors"
+                >
+                  <GoogleMark /> Continue with Google
+                </button>
               </motion.form>
             )}
 
@@ -526,10 +517,3 @@ function GoogleMark() {
   );
 }
 
-function AppleMark() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
-      <path d="M16.365 12.31c-.022-2.288 1.867-3.39 1.952-3.444-1.064-1.555-2.72-1.768-3.31-1.793-1.41-.142-2.751.83-3.467.83-.717 0-1.821-.81-2.997-.788-1.541.022-2.962.896-3.755 2.275-1.6 2.776-.41 6.879 1.151 9.13.762 1.099 1.667 2.33 2.853 2.286 1.146-.046 1.578-.74 2.962-.74 1.383 0 1.774.74 2.99.717 1.234-.022 2.014-1.122 2.768-2.225.871-1.273 1.23-2.51 1.252-2.574-.027-.012-2.4-.92-2.4-3.674zM14.04 5.06c.633-.769 1.06-1.835.943-2.9-.91.038-2.013.61-2.668 1.378-.587.683-1.103 1.778-.964 2.82 1.014.078 2.054-.515 2.689-1.298z" />
-    </svg>
-  );
-}

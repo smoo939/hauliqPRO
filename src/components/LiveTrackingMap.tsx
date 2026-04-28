@@ -3,7 +3,6 @@ import { MapContainer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import DynamicTileLayer from '@/components/map/DynamicTileLayer';
-import { supabase } from '@/integrations/supabase/client';
 import { Navigation, Clock, Timer } from 'lucide-react';
 
 const truckIcon = new L.DivIcon({
@@ -79,31 +78,40 @@ export default function LiveTrackingMap({ loadId, driverId, pickupLocation, deli
   }, [position?.lat, position?.lng, deliveryLocation]);
 
   useEffect(() => {
-    const channel = supabase.channel(`tracking:${loadId}`, {
-      config: { broadcast: { self: false } },
-    });
-    channel.on('broadcast', { event: 'location' }, ({ payload }) => {
-      const pos = payload as DriverPosition;
-      setPosition(pos);
-      setTrail(prev => {
-        const next = [...prev, [pos.lat, pos.lng] as [number, number]];
-        return next.length > 200 ? next.slice(-200) : next;
-      });
-      const ago = Math.round((Date.now() - pos.timestamp) / 1000);
-      setLastUpdate(ago < 5 ? 'Just now' : `${ago}s ago`);
-    });
-    channel.subscribe();
-    const timer = setInterval(() => {
-      if (position) {
-        const ago = Math.round((Date.now() - position.timestamp) / 1000);
-        if (ago < 60) setLastUpdate(`${ago}s ago`);
-        else setLastUpdate(`${Math.round(ago / 60)}m ago`);
+    let cancelled = false;
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/loads/${loadId}/tracking`);
+        if (!res.ok) return;
+        const json = await res.json();
+        const data = json?.data;
+        if (cancelled || !data || data.lat == null || data.lng == null) return;
+        const ts = data.updated_at ? new Date(data.updated_at).getTime() : Date.now();
+        const pos: DriverPosition = {
+          lat: Number(data.lat),
+          lng: Number(data.lng),
+          speed: data.speed != null ? Number(data.speed) : undefined,
+          heading: data.heading != null ? Number(data.heading) : undefined,
+          timestamp: ts,
+        };
+        setPosition(pos);
+        setTrail(prev => {
+          const last = prev[prev.length - 1];
+          if (last && last[0] === pos.lat && last[1] === pos.lng) return prev;
+          const next = [...prev, [pos.lat, pos.lng] as [number, number]];
+          return next.length > 200 ? next.slice(-200) : next;
+        });
+        const ago = Math.round((Date.now() - ts) / 1000);
+        setLastUpdate(ago < 5 ? 'Just now' : ago < 60 ? `${ago}s ago` : `${Math.round(ago / 60)}m ago`);
+      } catch {
+        /* silent */
       }
-    }, 5000);
-    return () => {
-      clearInterval(timer);
-      supabase.removeChannel(channel);
     };
+
+    poll();
+    const interval = setInterval(poll, 5000);
+    return () => { cancelled = true; clearInterval(interval); };
   }, [loadId]);
 
   const center: [number, number] = position

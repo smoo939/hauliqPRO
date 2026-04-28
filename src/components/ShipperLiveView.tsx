@@ -97,16 +97,22 @@ interface GeoShipment {
   delivery?: { lat: number; lng: number };
 }
 
-function FitBounds({ points }: { points: [number, number][] }) {
+function FitBounds({ points, fallback }: { points: [number, number][]; fallback?: { lat: number; lng: number } | null }) {
   const map = useMap();
   useEffect(() => {
-    if (points.length === 0) return;
+    if (points.length === 0) {
+      if (fallback) {
+        // No shipments yet — center on the user's own location at city zoom (never the whole country)
+        map.setView([fallback.lat, fallback.lng], 12, { animate: true });
+      }
+      return;
+    }
     if (points.length === 1) {
       map.setView(points[0], 11, { animate: true });
     } else {
       map.fitBounds(L.latLngBounds(points), { padding: [40, 40], maxZoom: 11 });
     }
-  }, [points, map]);
+  }, [points, map, fallback?.lat, fallback?.lng]);
   return null;
 }
 
@@ -290,7 +296,18 @@ export default function ShipperLiveView() {
     return pts;
   }, [geoShipments]);
 
-  const mapCenter = geoShipments[0]?.pickup || { lat: -19.0154, lng: 29.1549 };
+  // User-location fallback for the map center — never default to the whole country
+  const [userPos, setUserPos] = useState<{ lat: number; lng: number } | null>(null);
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => {},
+      { timeout: 5000, maximumAge: 60000 }
+    );
+  }, []);
+
+  const mapCenter = geoShipments[0]?.pickup || userPos || { lat: -17.8252, lng: 31.0335 }; // Harare as last resort
 
   return (
     <div className="fixed inset-0 z-0">
@@ -303,7 +320,7 @@ export default function ShipperLiveView() {
         attributionControl={false}
       >
         <DynamicTileLayer />
-        {mapPoints.length > 0 && <FitBounds points={mapPoints} />}
+        <FitBounds points={mapPoints} fallback={userPos} />
         {geoShipments.map((gs) => (
           <span key={gs.load.id}>
             {gs.pickup && (

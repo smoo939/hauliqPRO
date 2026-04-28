@@ -1,60 +1,68 @@
 import { useEffect, useRef } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 
-/**
- * Hook that broadcasts the driver's GPS position via Supabase Realtime
- * when they have an active in_transit load.
- */
-export function useDriverTracking(activeLoadId: string | null) {
+const PUBLISH_INTERVAL_MS = 8000;
+
+export function useDriverTracking(activeLoadId: string | null, driverId: string | null) {
   const watchRef = useRef<number | null>(null);
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const lastPublishRef = useRef(0);
+  const lastPosRef = useRef<{ lat: number; lng: number; speed?: number; heading?: number } | null>(null);
 
   useEffect(() => {
-    if (!activeLoadId || !navigator.geolocation) return;
+    if (!activeLoadId || !driverId || !navigator.geolocation) return;
 
-    const channel = supabase.channel(`tracking:${activeLoadId}`, {
-      config: { broadcast: { self: false } },
-    });
-    channelRef.current = channel;
+    const publish = async () => {
+      const pos = lastPosRef.current;
+      if (!pos) return;
+      try {
+        await fetch('/api/driver/location', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            load_id: activeLoadId,
+            driver_id: driverId,
+            lat: pos.lat,
+            lng: pos.lng,
+            speed: pos.speed ?? null,
+            heading: pos.heading ?? null,
+          }),
+        });
+      } catch {
+        // silent — will retry on next interval
+      }
+    };
 
-    channel.subscribe((status) => {
-      if (status !== 'SUBSCRIBED') return;
-
-      // Start watching position
-      watchRef.current = navigator.geolocation.watchPosition(
-        (pos) => {
-          channel.send({
-            type: 'broadcast',
-            event: 'location',
-            payload: {
-              lat: pos.coords.latitude,
-              lng: pos.coords.longitude,
-              speed: pos.coords.speed,
-              heading: pos.coords.heading,
-              timestamp: Date.now(),
-            },
-          });
-        },
-        (err) => {
-          console.warn('GPS error:', err.message);
-        },
-        {
-          enableHighAccuracy: true,
-          maximumAge: 5000,
-          timeout: 15000,
+    watchRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        lastPosRef.current = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          speed: pos.coords.speed ?? undefined,
+          heading: pos.coords.heading ?? undefined,
+        };
+        const now = Date.now();
+        if (now - lastPublishRef.current >= PUBLISH_INTERVAL_MS) {
+          lastPublishRef.current = now;
+          publish();
         }
-      );
-    });
+      },
+      (err) => console.warn('GPS error:', err.message),
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+    );
+
+    // Heartbeat to keep publishing even if no movement
+    const interval = setInterval(() => {
+      if (lastPosRef.current) {
+        lastPublishRef.current = Date.now();
+        publish();
+      }
+    }, PUBLISH_INTERVAL_MS);
 
     return () => {
       if (watchRef.current != null) {
         navigator.geolocation.clearWatch(watchRef.current);
         watchRef.current = null;
       }
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
+      clearInterval(interval);
     };
-  }, [activeLoadId]);
+  }, [activeLoadId, driverId]);
 }

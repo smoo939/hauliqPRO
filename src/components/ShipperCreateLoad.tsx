@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { trackEvent } from '@/lib/posthog';
 import { supabase } from '@/integrations/supabase/client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -40,6 +41,25 @@ export default function ShipperCreateLoad() {
   const [routeInfo, setRouteInfo] = useState<{ distanceKm: number; durationHours: number; suggestedPrice: number } | null>(null);
   const [aiDescLoading, setAiDescLoading] = useState(false);
   const [truckSuggestion, setTruckSuggestion] = useState<string | null>(null);
+  const [weightUnit, setWeightUnit] = useState<'kg' | 't'>('kg');
+
+  // Display value for the weight input — converts the kg-stored value to current unit
+  const weightDisplay = (() => {
+    if (!draft.weight_lbs) return '';
+    const kg = parseFloat(draft.weight_lbs);
+    if (!Number.isFinite(kg)) return '';
+    return weightUnit === 'kg' ? String(kg) : (kg / 1000).toString();
+  })();
+
+  const handleWeightChange = (value: string) => {
+    if (!value) { updateField('weight_lbs', ''); return; }
+    const n = parseFloat(value);
+    if (!Number.isFinite(n)) return;
+    const kg = weightUnit === 'kg' ? n : n * 1000;
+    updateField('weight_lbs', String(kg));
+    // Re-trigger truck recommendation when weight changes
+    setTruckSuggestion(recommendTruck(kg, draft.description || ''));
+  };
 
   const createLoad = useMutation({
     mutationFn: async (form: any) => {
@@ -55,8 +75,15 @@ export default function ShipperCreateLoad() {
       } as any);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables: any) => {
       queryClient.invalidateQueries({ queryKey: ['shipper-loads'] });
+      trackEvent('load_posted', {
+        load_type: variables?.load_type,
+        equipment_type: variables?.equipment_type,
+        weight_kg: variables?.weight_lbs ? parseFloat(variables.weight_lbs) : null,
+        budget_usd: variables?.price ? parseFloat(variables.price) : null,
+        urgent: !!variables?.urgent,
+      });
       toast.success('Load posted successfully!');
       clearDraft();
       setCargoPhotos([]);
@@ -300,8 +327,29 @@ export default function ShipperCreateLoad() {
                 <Input id="price" type="number" step="0.01" placeholder="Auto-calculated" required value={draft.price} onChange={(e) => updateField('price', e.target.value)} />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs" htmlFor="weight_lbs">Weight (kg)</Label>
-                <Input id="weight_lbs" type="number" placeholder="Optional" value={draft.weight_lbs} onChange={(e) => updateField('weight_lbs', e.target.value)} />
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs" htmlFor="weight_lbs">Weight</Label>
+                  <div className="inline-flex items-center rounded-full bg-secondary p-0.5 text-[10px] font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setWeightUnit('kg')}
+                      className={`px-2 py-0.5 rounded-full transition-colors ${weightUnit === 'kg' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+                    >kg</button>
+                    <button
+                      type="button"
+                      onClick={() => setWeightUnit('t')}
+                      className={`px-2 py-0.5 rounded-full transition-colors ${weightUnit === 't' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+                    >tonnes</button>
+                  </div>
+                </div>
+                <Input
+                  id="weight_lbs"
+                  type="number"
+                  step={weightUnit === 'kg' ? '1' : '0.1'}
+                  placeholder={weightUnit === 'kg' ? 'e.g. 20000' : 'e.g. 20'}
+                  value={weightDisplay}
+                  onChange={(e) => handleWeightChange(e.target.value)}
+                />
               </div>
             </div>
           </CardContent>

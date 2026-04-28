@@ -17,7 +17,7 @@ const pool = process.env.DATABASE_URL ? new Pool({ connectionString: process.env
 const tables = {
   profiles: ["id", "user_id", "full_name", "phone", "role", "avatar_url", "verified", "created_at", "updated_at"],
   user_roles: ["id", "user_id", "role", "created_at"],
-  loads: ["id", "shipper_id", "driver_id", "title", "description", "pickup_location", "delivery_location", "pickup_date", "pickup_time", "delivery_date", "delivery_time", "price", "platform_fee", "weight_lbs", "equipment_type", "load_type", "payment_method", "status", "tracking_code", "urgent", "accepted_at", "completed_at", "cancellation_reason", "cancelled_by", "created_at", "updated_at"],
+  loads: ["id", "shipper_id", "driver_id", "title", "description", "pickup_location", "delivery_location", "pickup_date", "pickup_time", "delivery_date", "delivery_time", "price", "platform_fee", "weight_lbs", "equipment_type", "load_type", "payment_method", "status", "tracking_code", "urgent", "accepted_at", "completed_at", "cancellation_reason", "cancelled_by", "driver_lat", "driver_lng", "driver_speed", "driver_heading", "driver_location_updated_at", "created_at", "updated_at"],
   bids: ["id", "load_id", "driver_id", "amount", "message", "note", "eta", "status", "created_at", "updated_at"],
   messages: ["id", "load_id", "sender_id", "content", "created_at"],
   reviews: ["id", "load_id", "reviewer_id", "reviewed_id", "rating", "comment", "created_at"],
@@ -235,6 +235,54 @@ async function migrate() {
   await safeAlter(`ALTER TABLE loads ADD COLUMN IF NOT EXISTS delivery_time text`);
   await safeAlter(`ALTER TABLE bids ADD COLUMN IF NOT EXISTS eta text`);
   await safeAlter(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS company_name text`);
+  await safeAlter(`ALTER TABLE loads ADD COLUMN IF NOT EXISTS driver_lat double precision`);
+  await safeAlter(`ALTER TABLE loads ADD COLUMN IF NOT EXISTS driver_lng double precision`);
+  await safeAlter(`ALTER TABLE loads ADD COLUMN IF NOT EXISTS driver_speed double precision`);
+  await safeAlter(`ALTER TABLE loads ADD COLUMN IF NOT EXISTS driver_heading double precision`);
+  await safeAlter(`ALTER TABLE loads ADD COLUMN IF NOT EXISTS driver_location_updated_at timestamptz`);
+  await safeAlter(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS city text`);
+  await safeAlter(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS country text`);
+}
+
+async function handleDriverLocation(req, res) {
+  if (!pool) return send(res, 500, { error: { message: "DATABASE_URL is not configured" } });
+  const body = await readJson(req);
+  const loadId = String(body.load_id || "");
+  const driverId = String(body.driver_id || "");
+  const lat = Number(body.lat);
+  const lng = Number(body.lng);
+  if (!loadId || !driverId || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return send(res, 400, { error: { message: "load_id, driver_id, lat, lng are required" } });
+  }
+  try {
+    await pool.query(
+      `UPDATE loads SET driver_lat=$1, driver_lng=$2, driver_speed=$3, driver_heading=$4, driver_location_updated_at=now()
+       WHERE id=$5 AND driver_id=$6`,
+      [lat, lng, Number.isFinite(Number(body.speed)) ? Number(body.speed) : null,
+       Number.isFinite(Number(body.heading)) ? Number(body.heading) : null,
+       loadId, driverId]
+    );
+    return send(res, 200, { data: { ok: true }, error: null });
+  } catch (error) {
+    return send(res, 500, { error: { message: error.message } });
+  }
+}
+
+async function handleTrackingRead(loadId, res) {
+  if (!pool) return send(res, 500, { error: { message: "DATABASE_URL is not configured" } });
+  try {
+    const result = await pool.query(
+      `SELECT driver_lat AS lat, driver_lng AS lng, driver_speed AS speed, driver_heading AS heading,
+              driver_location_updated_at AS updated_at, status, driver_id
+       FROM loads WHERE id=$1`,
+      [loadId]
+    );
+    const row = result.rows[0];
+    if (!row) return send(res, 404, { error: { message: "Load not found" } });
+    return send(res, 200, { data: row, error: null });
+  } catch (error) {
+    return send(res, 500, { error: { message: error.message } });
+  }
 }
 
 async function readJson(req) {
@@ -603,6 +651,11 @@ async function main() {
       if (req.method === "POST" && url.pathname === "/api/db/query") return send(res, 200, await handleDbQuery(await readJson(req)));
       if (req.method === "POST" && url.pathname.startsWith("/api/auth/")) return handleAuth(url.pathname, req, res);
       if (req.method === "POST" && url.pathname === "/api/storage/upload") return handleUpload(req, res);
+      if (req.method === "POST" && url.pathname === "/api/driver/location") return handleDriverLocation(req, res);
+      if (req.method === "GET" && url.pathname.startsWith("/api/loads/") && url.pathname.endsWith("/tracking")) {
+        const loadId = url.pathname.split("/")[3];
+        return handleTrackingRead(loadId, res);
+      }
       if (req.method === "POST" && url.pathname.startsWith("/api/functions/")) {
         const result = await handleFunction(url.pathname.split("/").pop(), await readJson(req));
         if (result.stream) {
