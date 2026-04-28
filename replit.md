@@ -73,3 +73,9 @@ Hauliq is a logistics/freight marketplace for Zimbabwe built with React + TypeSc
 - **Settings**: `SettingItem` is rounded-2xl with secondary background; sidebar items use soft hover.
 - **Auth/Onboarding**: `AuthPage` card uses `shadow-float`, role toggles are rounded-2xl pills with amber ring when selected. `RoleSelectPage` cards lose heavy borders, gain amber-glow icon tiles.
 - **Theme**: Light is the default theme (`useTheme` defaults to 'light'); dark mode is a soft premium dark (not industrial).
+
+### Phase 5 — Auth redesign + Privacy & Consent
+- **AuthPage redesign**: iOS pill-card aesthetic. Login has Email/Phone toggle pills, leading-icon inputs, Remember me + Forgot Password row, Log In button, "Or Continue With" with Google/Apple placeholder buttons. Signup field order: Full Name → Email → Phone → Country/City (replaced "State" with "City", country-filtered city list) → Home Address → New Password → Confirm Password → Role pills → Terms checkbox.
+- **H logo enlargement**: AuthPage tile is now `h-20 w-20 rounded-3xl` with logo `size={72}`; RoleSelectPage tiles are `h-16 w-16` with logo `size={56}`.
+- **Privacy & Terms pages**: `src/pages/PrivacyPolicy.tsx` and `src/pages/Terms.tsx`; routes `/privacy` and `/terms` in `src/App.tsx`. Auth-page Terms/Privacy links navigate here.
+- **ConsentGate**: `src/components/ConsentGate.tsx` wraps all routes inside `AuthProvider`. After auth, if no consent record exists for the user, a modal overlay forces them to accept Terms+Privacy and choose Notifications/Location toggles before they can use the app. Acceptance is stored in `localStorage` under `hauliq_consent_v1_<userId>`. If the user grants notifications/location, the gate triggers the corresponding browser permission prompts. Bumping `CONSENT_VERSION` re-prompts everyone.

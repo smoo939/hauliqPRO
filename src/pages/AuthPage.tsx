@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -94,6 +94,7 @@ function PillSelect(props: {
 
 export default function AuthPage() {
   const { user, signIn, signUp } = useAuth();
+  const navigate = useNavigate();
   const [isSignUp, setIsSignUp] = useState(false);
   const [step, setStep] = useState(1);
 
@@ -457,9 +458,9 @@ export default function AuthPage() {
                   <Checkbox id="terms" checked={agreeTerms} onCheckedChange={c => setAgreeTerms(c === true)} className="mt-0.5" />
                   <span className="text-xs leading-snug text-muted-foreground">
                     I agree with the{' '}
-                    <button type="button" onClick={comingSoon('Terms')} className="font-bold text-primary hover:underline">Terms and Conditions</button>
+                    <button type="button" onClick={() => navigate('/terms')} className="font-bold text-primary hover:underline">Terms and Conditions</button>
                     {' '}and{' '}
-                    <button type="button" onClick={comingSoon('Privacy Policy')} className="font-bold text-primary hover:underline">Privacy Policy</button>
+                    <button type="button" onClick={() => navigate('/privacy')} className="font-bold text-primary hover:underline">Privacy Policy</button>
                     {' '}of Hauliq.
                   </span>
                 </label>
