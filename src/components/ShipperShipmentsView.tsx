@@ -246,6 +246,7 @@ export default function ShipperShipmentsView() {
                     postedAt={load.created_at}
                     price={load.price}
                     truckType={load.equipment_type}
+                    viewerRole="shipper"
                     bidCount={showBidsButton ? count : null}
                     onBidsClick={
                       showBidsButton

@@ -442,6 +442,7 @@ export default function ShipperLiveView() {
                     postedAt={featuredLoad.created_at}
                     price={featuredLoad.price}
                     truckType={featuredLoad.equipment_type}
+                    viewerRole="shipper"
                     onClick={() => setSelectedLoad(featuredLoad)}
                   />
                 </div>
@@ -467,6 +468,7 @@ export default function ShipperLiveView() {
                       postedAt={load.created_at}
                       price={load.price}
                       truckType={load.equipment_type}
+                      viewerRole="shipper"
                       onClick={() => setSelectedLoad(load)}
                     />
                   ))}

@@ -3,6 +3,7 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { useBookmarks } from '@/hooks/useBookmarks';
 
 export type ShipmentStage = 'posted' | 'accepted' | 'in_transit' | 'delivered' | 'cancelled' | 'process';
+export type ViewerRole = 'shipper' | 'driver';
 
 interface ShipmentCardProps {
   id: string;
@@ -36,6 +37,12 @@ interface ShipmentCardProps {
   /** Shipper-side bid pill. Renders only when both props are set. */
   bidCount?: number | null;
   onBidsClick?: () => void;
+  /**
+   * Audience for the card. Controls header pill behavior:
+   *  - 'driver': hides the "Posted" status pill on available loads (cleaner for carriers).
+   *  - 'shipper': replaces the "Posted" status pill with a clickable "X Bids" pill.
+   */
+  viewerRole?: ViewerRole;
 }
 
 const STAGE_PILL: Record<string, { cls: string; label: string }> = {
@@ -49,7 +56,6 @@ const STAGE_PILL: Record<string, { cls: string; label: string }> = {
 
 function formatTime(t?: string | null) {
   if (!t) return null;
-  // Accept "HH:mm" or "HH:mm:ss" — render as 12-hour clock
   const [hh, mm] = t.split(':');
   const h = Number(hh);
   if (Number.isNaN(h)) return t;
@@ -74,6 +80,52 @@ function joinDateTime(dateStr?: string | null, timeStr?: string | null) {
   return d || t || null;
 }
 
+/** Decorative 3D parcel illustration shown bottom-right of the card. */
+function ParcelDecor() {
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute -right-3 -bottom-3 h-[88px] w-[88px] sm:h-[96px] sm:w-[96px] opacity-95 select-none"
+    >
+      <svg viewBox="0 0 100 100" className="h-full w-full drop-shadow-[0_8px_18px_rgba(251,146,60,0.35)]">
+        {/* Top face */}
+        <polygon
+          points="50,8 90,28 50,48 10,28"
+          fill="#FDBA74"
+        />
+        {/* Right face (front-right) */}
+        <polygon
+          points="90,28 90,72 50,92 50,48"
+          fill="#F97316"
+        />
+        {/* Left face (front-left) */}
+        <polygon
+          points="10,28 10,72 50,92 50,48"
+          fill="#EA580C"
+        />
+        {/* Top tape */}
+        <polygon
+          points="50,8 60,13 50,18 40,13"
+          fill="#C2410C"
+          opacity="0.55"
+        />
+        {/* Vertical tape on right face */}
+        <polygon
+          points="65,38 75,33 75,77 65,82"
+          fill="#9A3412"
+          opacity="0.35"
+        />
+        {/* Highlight on top */}
+        <polygon
+          points="50,8 90,28 70,18 50,12"
+          fill="#FED7AA"
+          opacity="0.55"
+        />
+      </svg>
+    </div>
+  );
+}
+
 export default function ShipmentCard({
   id,
   status,
@@ -91,8 +143,9 @@ export default function ShipmentCard({
   bookmarkId,
   bidCount,
   onBidsClick,
+  viewerRole,
 }: ShipmentCardProps) {
-  const pill = STAGE_PILL[status] ?? STAGE_PILL.posted;
+  const stagePill = STAGE_PILL[status] ?? STAGE_PILL.posted;
   const { has, toggle } = useBookmarks();
   const bId = bookmarkId || id;
   const isBookmarked = bookmarkable ? has(bId) : false;
@@ -104,20 +157,50 @@ export default function ShipmentCard({
   const pickupWhen = joinDateTime(pickupDate, pickupTime);
   const deliveryWhen = joinDateTime(deliveryDate, deliveryTime);
 
+  // Header pill rules:
+  //  - Driver looking at a posted load: hide the status pill entirely.
+  //  - Shipper looking at a posted load: replace it with a "X Bids" pill.
+  //  - Otherwise (other statuses): show the actual stage pill.
+  const isPosted = status === 'posted';
+  const showStagePill = !(viewerRole === 'driver' && isPosted) && !(viewerRole === 'shipper' && isPosted);
+  const showBidsPill = viewerRole === 'shipper' && isPosted;
+  const bidsValue = bidCount ?? 0;
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className="group w-full text-left bg-card rounded-[28px] shadow-soft active:scale-[0.99] transition-transform p-5"
+      className="group relative w-full text-left bg-card rounded-[28px] shadow-soft active:scale-[0.99] transition-transform p-5 overflow-hidden"
       data-testid={`card-shipment-${id}`}
     >
-      {/* Header: status + (bookmark) — right aligned, no ID */}
-      <div className="flex items-center justify-end gap-2">
-        <span
-          className={`inline-flex items-center px-3 py-1 rounded-full text-[11px] font-semibold tracking-tight ${pill.cls}`}
-        >
-          {pill.label}
-        </span>
+      {/* Header: status / bids + bookmark — right aligned */}
+      <div className="relative z-10 flex items-center justify-end gap-2 min-h-[28px]">
+        {showStagePill && (
+          <span
+            className={`inline-flex items-center px-3 py-1 rounded-full text-[11px] font-semibold tracking-tight ${stagePill.cls}`}
+          >
+            {stagePill.label}
+          </span>
+        )}
+        {showBidsPill && (
+          <span
+            role={onBidsClick ? 'button' : undefined}
+            onClick={(e) => {
+              if (!onBidsClick) return;
+              e.stopPropagation();
+              onBidsClick();
+            }}
+            className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold tracking-tight ${
+              bidsValue > 0
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-secondary text-foreground'
+            } ${onBidsClick ? 'cursor-pointer active:scale-95 transition-transform' : ''}`}
+            data-testid={`pill-bids-${id}`}
+          >
+            <MessageSquare className="h-3 w-3" strokeWidth={2.2} />
+            {bidsValue} {bidsValue === 1 ? 'Bid' : 'Bids'}
+          </span>
+        )}
         {bookmarkable && (
           <button
             type="button"
@@ -142,8 +225,8 @@ export default function ShipmentCard({
         )}
       </div>
 
-      {/* Vertical dotted route */}
-      <div className="mt-3 flex">
+      {/* Vertical dotted route — leave room for parcel on the right */}
+      <div className="relative z-10 mt-3 flex pr-16">
         <div className="flex flex-col items-center w-6 shrink-0 pt-1.5">
           <span className="h-2.5 w-2.5 rounded-full bg-primary ring-[3px] ring-primary/20" />
           <span className="flex-1 my-1 border-l-2 border-dotted border-muted-foreground/40 min-h-[36px] w-px" />
@@ -169,8 +252,8 @@ export default function ShipmentCard({
         </div>
       </div>
 
-      {/* Footer: Price • Equipment • Posted • (Bids) */}
-      <div className="mt-4 flex items-center justify-between gap-3">
+      {/* Footer: Price • Equipment • Posted */}
+      <div className="relative z-10 mt-4 flex items-center gap-3 pr-16">
         <div className="flex items-center gap-3 flex-wrap min-w-0">
           {price != null && price > 0 && (
             <span className="font-sans font-extrabold text-[18px] leading-none tracking-tight text-foreground tabular-nums">
@@ -190,21 +273,10 @@ export default function ShipmentCard({
             </span>
           )}
         </div>
-        {onBidsClick && bidCount != null && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onBidsClick();
-            }}
-            className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-[12px] font-bold text-primary-foreground shrink-0 active:scale-95 transition-transform"
-            data-testid={`button-view-bids-${id}`}
-          >
-            <MessageSquare className="h-3.5 w-3.5" strokeWidth={2.2} />
-            {bidCount} {bidCount === 1 ? 'Bid' : 'Bids'}
-          </button>
-        )}
       </div>
+
+      {/* Decorative orange parcel — bottom-right */}
+      <ParcelDecor />
     </button>
   );
 }

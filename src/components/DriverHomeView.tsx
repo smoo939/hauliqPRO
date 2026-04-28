@@ -5,7 +5,7 @@ import DynamicTileLayer from '@/components/map/DynamicTileLayer';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
-  Search, Sparkles, Radar, Package, ChevronUp, ChevronDown,
+  Search, Sparkles, Radar, Package, ChevronUp, ChevronDown, Truck, Flame, X,
 } from 'lucide-react';
 import { motion, useMotionValue, animate } from 'framer-motion';
 import LoadDetailModal from '@/components/driver/LoadDetailModal';
@@ -331,6 +331,18 @@ export default function DriverHomeView() {
         cycleSheet={cycleSheet}
       >
         <div className="px-4 pb-28">
+          {/* Quick filter chips — visible inline so carriers can narrow loads with one tap */}
+          {snapState !== 'collapsed' && (
+            <QuickFilterChips
+              filters={filters}
+              onChange={setFilters}
+              geofenceEnabled={geofenceEnabled}
+              onToggleGeofence={() => setGeofenceEnabled((v) => !v)}
+              totalCount={loads.length}
+              shownCount={sortedLoads.length}
+            />
+          )}
+
           {sortedLoads.length === 0 ? (
             <div className="flex flex-col items-center py-10 text-center">
               <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-secondary">
@@ -363,6 +375,7 @@ export default function DriverHomeView() {
                     postedAt={featuredLoad.created_at}
                     price={featuredLoad.price}
                     truckType={featuredLoad.equipment_type}
+                    viewerRole="driver"
                     bookmarkable
                     bookmarkId={featuredLoad.id}
                     onClick={() => handleSelectLoad(featuredLoad, featuredLoad.matchScore)}
@@ -390,6 +403,7 @@ export default function DriverHomeView() {
                       postedAt={load.created_at}
                       price={load.price}
                       truckType={load.equipment_type}
+                      viewerRole="driver"
                       bookmarkable
                       bookmarkId={load.id}
                       onClick={() => handleSelectLoad(load, load.matchScore)}
@@ -408,6 +422,108 @@ export default function DriverHomeView() {
         onClose={() => { setSelectedLoad(null); setSelectedMatchScore(undefined); }}
         matchScore={selectedMatchScore}
       />
+    </div>
+  );
+}
+
+// ---------------- Inline quick-filter chips ----------------
+
+const QUICK_EQUIPMENT = ['Flatbed', 'Refrigerated', 'Tanker', 'Container', 'Lowbed', 'Tipper'];
+
+interface QuickFilterChipsProps {
+  filters: Filters;
+  onChange: (f: Filters) => void;
+  geofenceEnabled: boolean;
+  onToggleGeofence: () => void;
+  totalCount: number;
+  shownCount: number;
+}
+
+function QuickFilterChips({
+  filters,
+  onChange,
+  geofenceEnabled,
+  onToggleGeofence,
+  totalCount,
+  shownCount,
+}: QuickFilterChipsProps) {
+  const toggleEquip = (eq: string) => {
+    const has = filters.equipment.includes(eq);
+    onChange({
+      ...filters,
+      equipment: has ? filters.equipment.filter((v) => v !== eq) : [...filters.equipment, eq],
+    });
+  };
+  const activeCount =
+    (filters.equipment.length > 0 ? 1 : 0) +
+    (filters.cargoType.length > 0 ? 1 : 0) +
+    (filters.minPrice > 0 ? 1 : 0) +
+    (filters.urgentOnly ? 1 : 0) +
+    (geofenceEnabled ? 1 : 0);
+  const reset = () => {
+    onChange(DEFAULT_FILTERS);
+    if (geofenceEnabled) onToggleGeofence();
+  };
+
+  return (
+    <div className="mb-3">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground font-semibold">
+          Showing {shownCount} of {totalCount}
+        </p>
+        {activeCount > 0 && (
+          <button
+            type="button"
+            onClick={reset}
+            className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-primary"
+          >
+            <X className="h-3 w-3" /> Clear filters
+          </button>
+        )}
+      </div>
+      <div className="-mx-4 px-4 overflow-x-auto scrollbar-none">
+        <div className="flex items-center gap-1.5 w-max pb-1">
+          <button
+            type="button"
+            onClick={onToggleGeofence}
+            className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-bold whitespace-nowrap transition-colors ${
+              geofenceEnabled
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-secondary text-foreground'
+            }`}
+          >
+            <Radar className="h-3 w-3" strokeWidth={2.2} /> Nearby
+          </button>
+          <button
+            type="button"
+            onClick={() => onChange({ ...filters, urgentOnly: !filters.urgentOnly })}
+            className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-bold whitespace-nowrap transition-colors ${
+              filters.urgentOnly
+                ? 'bg-destructive text-destructive-foreground'
+                : 'bg-secondary text-foreground'
+            }`}
+          >
+            <Flame className="h-3 w-3" strokeWidth={2.2} /> Urgent
+          </button>
+          {QUICK_EQUIPMENT.map((eq) => {
+            const active = filters.equipment.includes(eq);
+            return (
+              <button
+                key={eq}
+                type="button"
+                onClick={() => toggleEquip(eq)}
+                className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-bold whitespace-nowrap transition-colors ${
+                  active
+                    ? 'bg-foreground text-background'
+                    : 'bg-secondary text-foreground'
+                }`}
+              >
+                <Truck className="h-3 w-3" strokeWidth={2.2} /> {eq}
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
