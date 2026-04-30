@@ -18,6 +18,7 @@ import TermsPage from "./pages/Terms";
 import HauliqAIChatbot from "./components/HauliqAIChatbot";
 import OfflineModeBanner from "./components/OfflineModeBanner";
 import ConsentGate from "./components/ConsentGate";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 
 const queryClient = new QueryClient();
 
@@ -47,6 +48,7 @@ const App = () => (
             </ConsentGate>
           </AuthProvider>
         </BrowserRouter>
+        <SpeedInsights />
       </TooltipProvider>
     </ThemeProvider>
   </QueryClientProvider>
