@@ -831,10 +831,34 @@ async function main() {
       return send(res, 500, { error: { message: error.message || "Internal server error" } });
     }
   });
-  server.listen(port, "0.0.0.0", () => console.log(`Hauliq running on port ${port}`));
-}
+export default async function handler(req, res) {
+  try {
+    // Example: login route
+    if (req.url.startsWith("/api/login")) {
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ message: "Login endpoint working!" }));
+      return;
+    }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+    // Google OAuth routes
+    if (req.url.startsWith("/api/auth/google/start")) {
+      return handleGoogleStart(req, res);
+    }
+
+    if (req.url.startsWith("/api/auth/google/callback")) {
+      return handleGoogleCallback(req, res);
+    }
+
+    // Driver location route
+    if (req.url.startsWith("/api/driver/location")) {
+      return handleDriverLocation(req, res);
+    }
+
+    res.statusCode = 404;
+    res.end("Not Found");
+  } catch (error) {
+    console.error(error);
+    res.statusCode = 500;
+    res.end(JSON.stringify({ error: { message: error.message || "Internal server error" } }));
+  }
+}
