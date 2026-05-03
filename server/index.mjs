@@ -825,7 +825,12 @@ async function main() {
         }
         return send(res, result.status, result.body);
       }
-      return serveStatic(req, res, vite);
+            // Root route for health check
+      if (req.method === "GET" && url.pathname === "/") {
+        return send(res, 200, { message: "Backend is running!" });
+      }
+
+      return  serveStatic(req, res, vite);
     } catch (error) {
       console.error(error);
       return send(res, 500, { error: { message: error.message || "Internal server error" } });
