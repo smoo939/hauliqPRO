@@ -857,3 +857,15 @@ if (req.method === "GET" && url.pathname === "/") {
     res.end(JSON.stringify({ error: { message: error.message || "Internal server error" } }));
   }
 }
+// Export for Vercel serverless
+export default async function handler(req, res) {
+  try {
+    // Reuse your existing routing logic
+    return await mainHandler(req, res);
+  } catch (error) {
+    console.error(error);
+    res.statusCode = 500;
+    res.end(JSON.stringify({ error: { message: error.message || "Internal server error" } }));
+  }
+}
+
