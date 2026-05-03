@@ -857,6 +857,54 @@ if (req.method === "GET" && url.pathname === "/") {
     res.end(JSON.stringify({ error: { message: error.message || "Internal server error" } }));
   }
 }
+// Define mainHandler with your routing logic
+async function mainHandler(req, res) {
+  try {
+    const url = new URL(req.url || "/", `http://${req.headers.host}`);
+
+    if (req.method === "POST" && url.pathname === "/api/db/query") {
+      return send(res, 200, await handleDbQuery(await readJson(req)));
+    }
+    if (req.method === "GET" && url.pathname === "/api/auth/google") {
+      return handleGoogleStart(req, res);
+    }
+    if (req.method === "GET" && url.pathname === "/api/auth/google/callback") {
+      return handleGoogleCallback(req, res);
+    }
+    if (req.method === "POST" && url.pathname.startsWith("/api/auth/")) {
+      return handleAuth(url.pathname, req, res);
+    }
+    if (req.method === "POST" && url.pathname === "/api/storage/upload") {
+      return handleUpload(req, res);
+    }
+    if (req.method === "POST" && url.pathname === "/api/driver/location") {
+      return handleDriverLocation(req, res);
+    }
+
+    // health check
+    if (req.method === "GET" && url.pathname === "/") {
+      return send(res, 200, { message: "Backend is running!" });
+    }
+
+    return serveStatic(req, res, null);
+  } catch (error) {
+    console.error(error);
+    res.statusCode = 500;
+    res.end(JSON.stringify({ error: { message: error.message || "Internal server error" } }));
+  }
+}
+
+// Export for Vercel serverless
+export default async function handler(req, res) {
+  try {
+    return await mainHandler(req, res);
+  } catch (error) {
+    console.error(error);
+    res.statusCode = 500;
+    res.end(JSON.stringify({ error: { message: error.message || "Internal server error" } }));
+  }
+}
+
 // Export for Vercel serverless
 export default async function handler(req, res) {
   try {
