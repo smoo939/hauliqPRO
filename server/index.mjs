@@ -829,6 +829,10 @@ async function main() {
       if (req.method === "GET" && url.pathname === "/") {
         return send(res, 200, { message: "Backend is running!" });
       }
+// Root route for health check
+if (req.method === "GET" && url.pathname === "/") {
+  return send(res, 200, { message: "Backend is running!" });
+}
 
       return  serveStatic(req, res, vite);
     } catch (error) {
