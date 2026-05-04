@@ -17,7 +17,7 @@ const pool = process.env.DATABASE_URL ? new Pool({ connectionString: process.env
 const tables = {
   profiles: ["id", "user_id", "full_name", "phone", "role", "avatar_url", "verified", "created_at", "updated_at"],
   user_roles: ["id", "user_id", "role", "created_at"],
-  loads: ["id", "shipper_id", "driver_id", "title", "description", "pickup_location", "delivery_location", "pickup_date", "pickup_time", "delivery_date", "delivery_time", "price", "platform_fee", "weight_lbs", "equipment_type", "load_type", "payment_method", "status", "tracking_code", "urgent", "accepted_at", "completed_at", "cancellation_reason", "cancelled_by", "driver_lat", "driver_lng", "driver_speed", "driver_heading", "driver_location_updated_at", "created_at", "updated_at"],
+  loads: ["id", "shipper_id", "driver_id", "title", "description", "pickup_location", "delivery_location", "pickup_date", "pickup_time", "delivery_date", "delivery_time", "price", "platform_fee", "weight_lbs", "equipment_type", "load_type", "payment_method", "status", "tracking_code", "urgent", "accepted_at", "completed_at", "cancellation_reason", "cancelled_by", "created_at", "updated_at", "driver_lat", "driver_lng", "driver_speed", "driver_heading", "driver_location_updated_at"],
   bids: ["id", "load_id", "driver_id", "amount", "message", "note", "eta", "status", "created_at", "updated_at"],
   messages: ["id", "load_id", "sender_id", "content", "created_at"],
   reviews: ["id", "load_id", "reviewer_id", "reviewed_id", "rating", "comment", "created_at"],
@@ -529,7 +529,7 @@ async function handleDbQuery(payload) {
       const vals = Object.values(clean);
       const conflict = table === "profiles" ? "user_id" : table === "driver_verifications" ? "user_id" : table === "user_roles" ? "user_id, role" : "id";
       const updates = keys.filter((key) => !conflict.split(", ").includes(key)).map((key) => `${quote(key)} = EXCLUDED.${quote(key)}`);
-      const result = await pool.query(`INSERT INTO ${quote(table)} (${keys.map(quote).join(", ")}) VALUES (${keys.map((_, i) => `$${i + 1}`).join(", ")}) ON CONFLICT (${conflict.split(", ").map(quote).join(", ")}) DO UPDATE SET ${updates.length ? updates.join(", ") : `${quote(keys[0])} = EXCLUDED.${quote(keys[0])}`} RETURNING *`, vals);
+      const result = await pool.query(`INSERT INTO ${quote(table)} (${keys.map(quote).join(", ")}) VALUES (${keys.map((_, i) => `$${i + 1}`).join(", ")}) ON CONFLICT (${conflict.split(", ").map(quote).join(", ")}) DO UPDATE SET ${updates.join(", ")} RETURNING *`, vals);
       saved.push(result.rows[0]);
     }
     const rowsOut = normalizeRows(saved);
@@ -727,10 +727,10 @@ async function handleFunction(name, body) {
     const load = body.load || {};
     const basePrice = Number(load.price || 0);
     if (!isGeminiConfigured()) {
-      return { status: 200, body: { action: body.action, result: { carriers: [], market_insight: "AI matching is not configured.", recommended_rate_usd: basePrice, rate_range_low_usd: basePrice, rate_range_high_usd: basePrice, rate_per_km_usd: 0, estimated_distance_km: 0, fuel_cost_estimate_usd: 0, platform_fee_usd: basePrice * 0.1, driver_payout_usd: basePrice * 0.9, price_factors: [], market_comparison: "AI pricing is not configured." } } };
+      return { status: 200, body: { action: body.action, result: { carriers: [], market_insight: "AI matching is not configured.", recommended_rate_usd: basePrice, rate_range_low_usd: basePrice, rate_range_high_usd: basePrice } } };
     }
     try {
-      const prompt = `Analyze this Zimbabwe freight load and respond ONLY with valid JSON containing: recommended_rate_usd (number), rate_range_low_usd (number), rate_range_high_usd (number), market_insight (one short sentence string).\nLoad: ${JSON.stringify(load)}`;
+      const prompt = `Analyze this Zimbabwe freight load and respond ONLY with valid JSON containing: recommended_rate_usd (number), rate_range_low_usd (number), rate_range_high_usd (number), market_insight (string). Load: ${JSON.stringify(load)}`;
       const text = await generateGeminiText([{ role: "user", content: prompt }], "shipper");
       const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
       const parsed = JSON.parse(cleaned);
@@ -740,7 +740,7 @@ async function handleFunction(name, body) {
       return { status: 200, body: { action: body.action, result: { recommended_rate_usd: basePrice, market_insight: "Could not get AI pricing at this time.", platform_fee_usd: basePrice * 0.1, driver_payout_usd: basePrice * 0.9 } } };
     }
   }
-  if (name === "verify-document") return { status: 200, body: { success: true, data: { valid: true, face_detected: true, liveness_indicators: "natural" }, status: "manual_review", issues: [], message: "Manual review requested." } };
+  if (name === "verify-document") return { status: 200, body: { success: true, data: { valid: true, face_detected: true, liveness_indicators: "natural" }, status: "manual_review", issues: [], message: "Document submitted for manual review" } };
   return { status: 404, body: { error: "Function not found" } };
 }
 
@@ -777,147 +777,58 @@ async function serveStatic(req, res, vite) {
   }
 }
 
-async function main() {
-  await migrate();
-  if (process.argv.includes("--migrate-only")) {
-    await pool?.end();
-    return;
-  }
-  let vite = null;
-  if (process.env.NODE_ENV !== "production") {
-    const { createServer } = await import("vite");
-    vite = await createServer({ server: { middlewareMode: true, host: "0.0.0.0", allowedHosts: true }, appType: "spa" });
-  }
-  const server = http.createServer(async (req, res) => {
-    try {
-      const url = new URL(req.url || "/", `http://${req.headers.host}`);
-      if (req.method === "POST" && url.pathname === "/api/db/query") return send(res, 200, await handleDbQuery(await readJson(req)));
-      if (req.method === "GET" && url.pathname === "/api/auth/google") return handleGoogleStart(req, res);
-      if (req.method === "GET" && url.pathname === "/api/auth/google/callback") return handleGoogleCallback(req, res);
-      if (req.method === "POST" && url.pathname.startsWith("/api/auth/")) return handleAuth(url.pathname, req, res);
-      if (req.method === "POST" && url.pathname === "/api/storage/upload") return handleUpload(req, res);
-      if (req.method === "POST" && url.pathname === "/api/driver/location") return handleDriverLocation(req, res);
-      if (req.method === "GET" && url.pathname.startsWith("/api/loads/") && url.pathname.endsWith("/tracking")) {
-        const loadId = url.pathname.split("/")[3];
-        return handleTrackingRead(loadId, res);
-      }
-      if (req.method === "POST" && url.pathname.startsWith("/api/functions/")) {
-        const result = await handleFunction(url.pathname.split("/").pop(), await readJson(req));
-        if (result.stream) {
-          res.writeHead(200, {
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive"
-          });
-          try {
-            for await (const chunk of result.stream) {
-              const text = chunk?.text || "";
-              if (!text) continue;
-              const payload = { choices: [{ delta: { content: text } }] };
-              res.write(`data: ${JSON.stringify(payload)}\n\n`);
-            }
-            res.write("data: [DONE]\n\n");
-          } catch (err) {
-            const errPayload = { error: err?.message || "Stream error" };
-            res.write(`data: ${JSON.stringify(errPayload)}\n\n`);
+async function mainHandler(req, res) {
+  try {
+    const url = new URL(req.url || "/", `http://${req.headers.host}`);
+
+    if (req.method === "POST" && url.pathname === "/api/db/query") {
+      return send(res, 200, await handleDbQuery(await readJson(req)));
+    }
+    if (req.method === "GET" && url.pathname === "/api/auth/google") {
+      return handleGoogleStart(req, res);
+    }
+    if (req.method === "GET" && url.pathname === "/api/auth/google/callback") {
+      return handleGoogleCallback(req, res);
+    }
+    if (req.method === "POST" && url.pathname.startsWith("/api/auth/")) {
+      return handleAuth(url.pathname, req, res);
+    }
+    if (req.method === "POST" && url.pathname === "/api/storage/upload") {
+      return handleUpload(req, res);
+    }
+    if (req.method === "POST" && url.pathname === "/api/driver/location") {
+      return handleDriverLocation(req, res);
+    }
+    if (req.method === "GET" && url.pathname.startsWith("/api/loads/") && url.pathname.endsWith("/tracking")) {
+      const loadId = url.pathname.split("/")[3];
+      return handleTrackingRead(loadId, res);
+    }
+    if (req.method === "POST" && url.pathname.startsWith("/api/functions/")) {
+      const result = await handleFunction(url.pathname.split("/").pop(), await readJson(req));
+      if (result.stream) {
+        res.writeHead(200, {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive"
+        });
+        try {
+          for await (const chunk of result.stream) {
+            const text = chunk?.text || "";
+            if (!text) continue;
+            const payload = { choices: [{ delta: { content: text } }] };
+            res.write(`data: ${JSON.stringify(payload)}\n\n`);
           }
-          return res.end();
+          res.write("data: [DONE]\n\n");
+        } catch (err) {
+          const errPayload = { error: err?.message || "Stream error" };
+          res.write(`data: ${JSON.stringify(errPayload)}\n\n`);
         }
-        return send(res, result.status, result.body);
+        return res.end();
       }
-            // Root route for health check
-      if (req.method === "GET" && url.pathname === "/") {
-        return send(res, 200, { message: "Backend is running!" });
-      }
-// Root route for health check
-if (req.method === "GET" && url.pathname === "/") {
-  return send(res, 200, { message: "Backend is running!" });
-}
-// Root route for health check
-if (req.method === "GET" && url.pathname === "/") {
-  return send(res, 200, { message: "Backend is running!" });
-}
-
-      return  serveStatic(req, res, vite);
-    } catch (error) {
-      console.error(error);
-      return send(res, 500, { error: { message: error.message || "Internal server error" } });
+      return send(res, result.status, result.body);
     }
 
-    // Driver location route
-    if (req.url.startsWith("/api/driver/location")) {
-      return handleDriverLocation(req, res);
-    }
-
-    res.statusCode = 404;
-    res.end("Not Found");
-  } catch (error) {
-    console.error(error);
-    res.statusCode = 500;
-    res.end(JSON.stringify({ error: { message: error.message || "Internal server error" } }));
-  }
-}
-// Define mainHandler with your routing logic
-async function mainHandler(req, res) {
-  try {
-    const url = new URL(req.url || "/", `http://${req.headers.host}`);
-
-    if (req.method === "POST" && url.pathname === "/api/db/query") {
-      return send(res, 200, await handleDbQuery(await readJson(req)));
-    }
-    if (req.method === "GET" && url.pathname === "/api/auth/google") {
-      return handleGoogleStart(req, res);
-    }
-    if (req.method === "GET" && url.pathname === "/api/auth/google/callback") {
-      return handleGoogleCallback(req, res);
-    }
-    if (req.method === "POST" && url.pathname.startsWith("/api/auth/")) {
-      return handleAuth(url.pathname, req, res);
-    }
-    if (req.method === "POST" && url.pathname === "/api/storage/upload") {
-      return handleUpload(req, res);
-    }
-    if (req.method === "POST" && url.pathname === "/api/driver/location") {
-      return handleDriverLocation(req, res);
-    }
-
-    // health check
-    if (req.method === "GET" && url.pathname === "/") {
-      return send(res, 200, { message: "Backend is running!" });
-    }
-
-    return serveStatic(req, res, null);
-  } catch (error) {
-    console.error(error);
-    res.statusCode = 500;
-    res.end(JSON.stringify({ error: { message: error.message || "Internal server error" } }));
-  }
-}
-// Define mainHandler with your routing logic
-async function mainHandler(req, res) {
-  try {
-    const url = new URL(req.url || "/", `http://${req.headers.host}`);
-
-    if (req.method === "POST" && url.pathname === "/api/db/query") {
-      return send(res, 200, await handleDbQuery(await readJson(req)));
-    }
-    if (req.method === "GET" && url.pathname === "/api/auth/google") {
-      return handleGoogleStart(req, res);
-    }
-    if (req.method === "GET" && url.pathname === "/api/auth/google/callback") {
-      return handleGoogleCallback(req, res);
-    }
-    if (req.method === "POST" && url.pathname.startsWith("/api/auth/")) {
-      return handleAuth(url.pathname, req, res);
-    }
-    if (req.method === "POST" && url.pathname === "/api/storage/upload") {
-      return handleUpload(req, res);
-    }
-    if (req.method === "POST" && url.pathname === "/api/driver/location") {
-      return handleDriverLocation(req, res);
-    }
-
-    // health check
+    // Health check and static file serving
     if (req.method === "GET" && url.pathname === "/") {
       return send(res, 200, { message: "Backend is running!" });
     }
@@ -933,6 +844,8 @@ async function mainHandler(req, res) {
 // Export for Vercel serverless
 export default async function handler(req, res) {
   try {
+    // Run migration on first call
+    await migrate();
     return await mainHandler(req, res);
   } catch (error) {
     console.error(error);
@@ -940,6 +853,3 @@ export default async function handler(req, res) {
     res.end(JSON.stringify({ error: { message: error.message || "Internal server error" } }));
   }
 }
-
-
-
