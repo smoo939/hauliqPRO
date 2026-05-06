@@ -1,37 +1,20 @@
+import { createClient } from '@supabase/supabase-js';
 import { postJson, queryServer } from '@/lib/serverApi';
 import { savePendingBid, selectLocalTable } from '@/lib/localFirst';
 
-type Listener = (event: string, session: Session | null) => void;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-type Session = {
-  access_token: string;
-  refresh_token?: string;
-  token_type?: string;
-  expires_in?: number;
-  user: any;
-};
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing Supabase environment variables: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
+}
+
+// Create official Supabase client
+const _supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
 
 type Filter = { op: string; column: string; value: any };
 
-const SESSION_KEY = 'hauliq_replit_session';
-const listeners = new Set<Listener>();
-
-function getStoredSession(): Session | null {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-function setStoredSession(session: Session | null, event: string) {
-  if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  else localStorage.removeItem(SESSION_KEY);
-  listeners.forEach((listener) => listener(event, session));
-}
-
-class QueryBuilder {
+class LocalFirstQueryBuilder {
   private action = 'select';
   private selected = '*';
   private options: any = {};
@@ -120,26 +103,56 @@ class QueryBuilder {
   }
 
   async execute() {
-    if (this.action === 'delete') return { data: null, error: { message: 'Delete is not enabled in this migration layer' }, count: null };
+    // Local-first for reads on specific tables
     if (this.action === 'select' && ['loads', 'bids'].includes(this.table)) {
-      const rows = await selectLocalTable(this.table, this.filters, this.orderBy, this.limitBy || undefined, this.singleResult, this.maybeSingleResult);
-      return { data: rows, error: null, count: Array.isArray(rows) ? rows.length : rows ? 1 : 0 };
+      const rows = await selectLocalTable(
+        this.table,
+        this.filters,
+        this.orderBy,
+        this.limitBy || undefined,
+        this.singleResult,
+        this.maybeSingleResult
+      );
+      return {
+        data: rows,
+        error: null,
+        count: Array.isArray(rows) ? rows.length : rows ? 1 : 0,
+      };
     }
+
+    // Local-first for pending bids insert
     if (this.action === 'insert' && this.table === 'bids') {
       const rows = Array.isArray(this.values) ? this.values : [this.values];
       const saved = [];
       for (const row of rows) {
-        saved.push(await savePendingBid({
-          load_id: row.load_id,
-          driver_id: row.driver_id,
-          amount: Number(row.amount),
-          message: row.message || null,
-          note: row.note || null,
-          eta: row.eta || null,
-        }));
+        saved.push(
+          await savePendingBid({
+            load_id: row.load_id,
+            driver_id: row.driver_id,
+            amount: Number(row.amount),
+            message: row.message || null,
+            note: row.note || null,
+            eta: row.eta || null,
+          })
+        );
       }
-      return { data: this.singleResult ? saved[0] : saved, error: null, count: saved.length };
+      return {
+        data: this.singleResult ? saved[0] : saved,
+        error: null,
+        count: saved.length,
+      };
     }
+
+    // Prevent deletes through this layer
+    if (this.action === 'delete') {
+      return {
+        data: null,
+        error: { message: 'Delete is not enabled in this migration layer' },
+        count: null,
+      };
+    }
+
+    // Fall back to server API for all other operations
     return queryServer({
       table: this.table,
       action: this.action,
@@ -169,51 +182,29 @@ async function fileToDataUrl(file: File) {
   });
 }
 
+/**
+ * Supabase wrapper with local-first capabilities
+ * 
+ * Features:
+ * - Uses official @supabase/supabase-js SDK
+ * - Local-first reads for 'loads' and 'bids' tables via selectLocalTable
+ * - Pending bids insert support via savePendingBid
+ * - Server API fallback for other operations
+ * - Direct access to official Supabase client via supabase._raw
+ */
 export const supabase = {
-  auth: {
-    onAuthStateChange(callback: Listener) {
-      listeners.add(callback);
-      return { data: { subscription: { unsubscribe: () => listeners.delete(callback) } } };
-    },
-    async getSession() {
-      return { data: { session: getStoredSession() }, error: null };
-    },
-    async getUser() {
-      const session = getStoredSession();
-      return { data: { user: session?.user || null }, error: null };
-    },
-    async signUp({ email, password, options }: any) {
-      const result = await postJson('/api/auth/signup', { email, password, data: options?.data || {} });
-      if (result.error) return result;
-      setStoredSession(result.data.session, 'SIGNED_IN');
-      return result;
-    },
-    async signInWithPassword({ email, password }: any) {
-      const result = await postJson('/api/auth/signin', { email, password });
-      if (result.error) return result;
-      setStoredSession(result.data.session, 'SIGNED_IN');
-      return result;
-    },
-    async signOut() {
-      setStoredSession(null, 'SIGNED_OUT');
-      return { error: null };
-    },
-    async updateUser(values: any) {
-      return postJson('/api/auth/update', values);
-    },
-    async setSession(tokens: Session) {
-      setStoredSession(tokens, 'SIGNED_IN');
-      return { data: { session: tokens }, error: null };
-    },
-  },
+  auth: _supabaseClient.auth,
+
   from(table: string) {
-    return new QueryBuilder(table);
+    return new LocalFirstQueryBuilder(table);
   },
+
   functions: {
     async invoke(name: string, options: any = {}) {
       return postJson(`/api/functions/${name}`, options.body || {});
     },
   },
+
   storage: {
     from(_bucket: string) {
       return {
@@ -228,11 +219,12 @@ export const supabase = {
       };
     },
   },
-  channel(_name: string) {
-    return {
-      on() { return this; },
-      subscribe() { return this; },
-    };
-  },
-  removeChannel(_channel: any) {},
+
+  channel: _supabaseClient.channel.bind(_supabaseClient),
+  removeChannel: _supabaseClient.removeChannel.bind(_supabaseClient),
+
+  /**
+   * Direct access to official Supabase client for features not wrapped
+   */
+  _raw: _supabaseClient,
 };
