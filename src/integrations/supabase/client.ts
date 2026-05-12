@@ -5,6 +5,10 @@ import { savePendingBid, selectLocalTable } from '@/lib/localFirst';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// 🔹 Diagnostic log - confirms frontend is using correct Supabase URL
+console.log('✅ Supabase URL at runtime:', supabaseUrl);
+console.log('✅ Environment variables loaded from .env.local');
+
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
 }
@@ -187,10 +191,13 @@ async function fileToDataUrl(file: File) {
  * 
  * Features:
  * - Uses official @supabase/supabase-js SDK
+ * - Frontend uses VITE_SUPABASE_URL (https://ajxggjeuxfjshrovmzzx.supabase.co)
  * - Local-first reads for 'loads' and 'bids' tables via selectLocalTable
  * - Pending bids insert support via savePendingBid
  * - Server API fallback for other operations
  * - Direct access to official Supabase client via supabase._raw
+ * 
+ * Note: DATABASE_URL is only used in backend/migrations, never in frontend
  */
 export const supabase = {
   auth: _supabaseClient.auth,
